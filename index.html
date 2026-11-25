@@ -1,0 +1,460 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#51249b">
+<title>PiLoop</title>
+<style>
+:root{--p:#51249b;--p2:#7545c7;--gold:#edbd50;--bg:#f7f5fc;--ink:#272239;--muted:#777187}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Tahoma,sans-serif;line-height:1.8}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+header{background:linear-gradient(125deg,#30145e,#7444c4);color:white;padding:20px 5% 28px;border-radius:0 0 26px 26px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{font-size:28px;font-weight:900;letter-spacing:.5px}
+.logo span{color:var(--gold)}
+.header-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.header-tools select{background:white;color:#32145e;border:0;border-radius:10px;padding:9px;max-width:170px}
+.profile-btn{background:var(--gold);color:#32145e;border:0;border-radius:10px;padding:9px 13px;font-weight:bold}
+.hero{max-width:800px;margin:25px 0 5px}
+.hero h1{font-size:clamp(23px,5vw,36px);margin:0 0 8px;line-height:1.5}
+.hero p{color:#eee;margin:0 0 18px}
+.search{background:white;display:flex;padding:6px;border-radius:13px;gap:6px}
+.search input{flex:1;min-width:0;border:0;outline:0;padding:10px;color:#222}
+.search button{background:var(--p);color:white;border:0;border-radius:9px;padding:8px 15px}
+main{max-width:1150px;margin:auto;padding:20px 15px 110px}
+.heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:20px 0 12px}
+.heading h2{font-size:19px;margin:0}
+.small{font-size:12px;color:var(--muted)}
+.categories{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
+.category{background:white;border:1px solid #ebe7f2;border-radius:16px;padding:13px 5px;text-align:center;color:var(--ink)}
+.category .emoji{display:block;font-size:29px}
+.category strong{font-size:12px}
+.category.active{border:2px solid var(--gold);background:#fffaf0}
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
+.filters button{background:white;border:1px solid #e4ddec;color:var(--p);border-radius:22px;padding:7px 13px;font-size:12px}
+.filters button.active{background:var(--p);color:white}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:white;border:1px solid #eee;border-radius:16px;overflow:hidden;box-shadow:0 5px 18px #2e175b0b}
+.cover{height:130px;background:linear-gradient(135deg,#e9defb,#fff0cd);display:grid;place-items:center;font-size:48px}
+.cardbody{padding:13px}
+.card h3{font-size:15px;margin:0 0 6px}
+.card p{font-size:12px;color:var(--muted);margin:5px 0 10px;overflow-wrap:anywhere}
+.meta{font-size:11px;color:var(--muted)}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.actions button{flex:1;border:0;border-radius:9px;padding:8px 5px;font-size:11px;background:#f0ebfa;color:var(--p)}
+.actions .view{background:var(--p);color:white}
+.actions .delete{background:#fff0f0;color:#b32626}
+.empty{grid-column:1/-1;background:white;border-radius:15px;padding:25px;text-align:center;color:var(--muted)}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;box-shadow:0 -4px 16px #0001;display:flex;justify-content:space-around;padding:8px 2px calc(8px + env(safe-area-inset-bottom));z-index:5}
+nav button{border:0;background:transparent;color:#777;font-size:10px;display:flex;flex-direction:column;align-items:center}
+nav span{font-size:20px}
+nav button.active{color:var(--p);font-weight:bold}
+.fab{position:fixed;bottom:75px;left:15px;z-index:6;background:var(--gold);color:#32145e;border:0;border-radius:30px;padding:12px 17px;font-weight:bold;box-shadow:0 4px 14px #0002}
+.modal{display:none;position:fixed;inset:0;background:#17102099;z-index:10;align-items:center;justify-content:center;padding:14px}
+.modal.show{display:flex}
+.dialog{width:min(100%,520px);max-height:90vh;overflow:auto;background:white;border-radius:19px;padding:19px}
+.dialog h2{margin:0 0 13px;font-size:20px}
+.dialog label{font-size:12px;font-weight:bold}
+.dialog input,.dialog textarea,.dialog select{display:block;width:100%;padding:11px;border:1px solid #ddd;border-radius:10px;margin:6px 0 12px;background:white;color:#222}
+.dialog textarea{min-height:90px}
+.dialogbuttons{display:flex;gap:8px;margin-top:12px}
+.dialogbuttons button{flex:1;border:0;border-radius:10px;padding:10px}
+.primary{background:var(--p);color:white}
+.cancel{background:#eee;color:#333}
+.detailtext{white-space:pre-wrap;overflow-wrap:anywhere}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
+@media(max-width:700px){.categories{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:430px){.cards{grid-template-columns:1fr}.cover{height:120px}}
+</style>
+</head>
+<body>
+<header>
+ <div class="head">
+  <div class="logo">Pi<span>Loop</span></div>
+  <div class="header-tools">
+   <select id="languageSelect" aria-label="Language" onchange="changeLanguage(this.value)">
+    <option value="fa">🇮🇷 فارسی</option>
+    <option value="en">🇬🇧 English</option>
+    <option value="ku">☀️ کوردی</option>
+    <option value="ar">🇸🇦 العربية</option>
+    <option value="tr">🇹🇷 Türkçe</option>
+    <option value="de">🇩🇪 Deutsch</option>
+    <option value="fr">🇫🇷 Français</option>
+    <option value="es">🇪🇸 Español</option>
+    <option value="zh">🇨🇳 中文</option>
+    <option value="ja">🇯🇵 日本語</option>
+    <option value="hi">🇮🇳 हिन्दी</option>
+   </select>
+   <button class="profile-btn" id="profileButton" onclick="profile()">👤</button>
+  </div>
+ </div>
+ <div class="hero">
+  <h1 id="heroTitle"></h1>
+  <p id="heroText"></p>
+  <div class="search">
+   <input id="search" oninput="render()">
+   <button id="searchButton" onclick="render()"></button>
+  </div>
+ </div>
+</header>
+
+<main>
+ <div class="heading"><h2 id="categoriesTitle"></h2><span class="small" id="categoryCount"></span></div>
+ <div class="categories" id="categories"></div>
+ <div class="heading">
+  <h2 id="listHeading"></h2>
+  <span class="small" id="total"></span>
+ </div>
+ <div class="filters">
+  <button id="filterAll" class="active" onclick="changeView('all',this)"></button>
+  <button id="filterSaved" onclick="changeView('saved',this)"></button>
+  <button id="filterMine" onclick="changeView('mine',this)"></button>
+ </div>
+ <div class="cards" id="results"></div>
+ <footer>PiLoop · Connect · Discover · Collaborate</footer>
+</main>
+
+<button class="fab" id="addButton" onclick="openAdd()"></button>
+
+<nav>
+ <button class="active" onclick="home(this)"><span>⌂</span><b id="navHome"></b></button>
+ <button onclick="searchFocus()"><span>⌕</span><b id="navSearch"></b></button>
+ <button onclick="changeView('saved',null)"><span>♥</span><b id="navSaved"></b></button>
+ <button onclick="openAdd()"><span>＋</span><b id="navAdd"></b></button>
+ <button onclick="profile()"><span>👤</span><b id="navProfile"></b></button>
+</nav>
+
+<div class="modal" id="addModal">
+ <div class="dialog">
+  <h2 id="formHeading"></h2>
+  <form id="addForm">
+   <label id="labelTitle"></label>
+   <input id="title" required maxlength="90">
+   <label id="labelCategory"></label>
+   <select id="category"></select>
+   <label id="labelDescription"></label>
+   <textarea id="description" required maxlength="1000"></textarea>
+   <label id="labelLocation"></label>
+   <input id="location">
+   <label id="labelContact"></label>
+   <input id="contact">
+   <div class="dialogbuttons">
+    <button type="button" class="cancel" id="cancelButton" onclick="closeModal('addModal')"></button>
+    <button type="submit" class="primary" id="submitButton"></button>
+   </div>
+  </form>
+ </div>
+</div>
+
+<div class="modal" id="detailModal">
+ <div class="dialog">
+  <h2 id="detailTitle"></h2>
+  <div class="small" id="detailCategory"></div>
+  <p class="detailtext" id="detailDescription"></p>
+  <p id="detailLocation" class="small"></p>
+  <p id="detailContact"></p>
+  <div class="dialogbuttons">
+   <button class="cancel" id="closeDetail" onclick="closeModal('detailModal')"></button>
+   <button class="primary" id="detailFavorite"></button>
+  </div>
+ </div>
+</div>
+
+<div class="modal" id="profileModal">
+ <div class="dialog">
+  <h2 id="profileHeading"></h2>
+  <p id="profileWelcome"></p>
+  <div id="stats"></div>
+  <p class="small" id="piNotice"></p>
+  <div class="dialogbuttons">
+   <button class="cancel" id="closeProfile" onclick="closeModal('profileModal')"></button>
+  </div>
+ </div>
+</div>
+
+<script>
+const translations={
+fa:{
+dir:"rtl",name:"فارسی",hero:"جهانی از ارتباط و فرصت",intro:"کسب‌وکار، خدمات، آموزش، همکاری و کمک‌رسانی را در یک جامعه جهانی کشف کن.",
+search:"جستجو",searchHint:"جستجوی خدمات، محصولات و فرصت‌ها...",categories:"دسته‌بندی‌ها",eight:"۸ بخش اصلی",latest:"آخرین موارد",all:"همه موارد",saved:"علاقه‌مندی‌ها",mine:"موارد من",add:"＋ ثبت مورد جدید",profile:"حساب من",home:"خانه",navSearch:"جستجو",navSaved:"ذخیره‌ها",navAdd:"ثبت مورد",navProfile:"پروفایل",form:"ثبت مورد جدید",title:"عنوان",category:"دسته‌بندی",description:"توضیحات",location:"مکان",contact:"راه ارتباطی (اختیاری)",titleHint:"عنوان مورد خود را بنویسید",descriptionHint:"توضیحات کامل...",locationHint:"شهر یا کشور",contactHint:"ایمیل یا شناسه ارتباطی",cancel:"انصراف",submit:"ثبت مورد",details:"جزئیات",save:"♡ ذخیره",savedLabel:"♥ ذخیره‌شده",delete:"🗑 حذف",empty:"موردی پیدا نشد. می‌توانی اولین مورد را ثبت کنی.",confirm:"آیا از حذف این مورد مطمئن هستی؟",place:"مکان",unknown:"مشخص نشده",noContact:"راه ارتباطی ثبت نشده است.",profileWelcome:"به جامعه PiLoop خوش آمدی.",registered:"موارد ثبت‌شده",favorites:"علاقه‌مندی‌ها",piNotice:"ورود واقعی با Pi و حساب آنلاین هنوز راه‌اندازی نشده است.",close:"بستن",categoriesList:["خدمات","محصولات","کار دیجیتال","جامعه","فرصت‌های همکاری","آموزش و یادگیری","رویدادها","کمک‌رسانی"],sample:["خدمات تخصصی خود را معرفی کنید و ارائه‌دهندگان خدمات را پیدا کنید.","محصولات و کسب‌وکارها را کشف کنید و با فروشندگان ارتباط بگیرید.","برای طراحی، برنامه‌نویسی و تولید محتوا همکار پیدا کنید.","با کاربران دیگر آشنا شوید و تجربه‌های خود را به اشتراک بگذارید.","برای توسعه ایده‌ها و کسب‌وکارهای جدید شریک پیدا کنید.","مهارت‌های خود را آموزش دهید یا فرصت یادگیری پیدا کنید.","نشست‌ها، وبینارها و رویدادهای آموزشی را معرفی کنید.","کمپین‌های حمایت از خانواده‌های نیازمند، کودکان و امدادرسانی را معرفی کنید."]},
+en:{
+dir:"ltr",name:"English",hero:"A world of connection and opportunity",intro:"Discover businesses, services, learning, collaboration and support in one global community.",
+search:"Search",searchHint:"Search services, products and opportunities...",categories:"Categories",eight:"8 main sections",latest:"Latest listings",all:"All listings",saved:"Favorites",mine:"My listings",add:"+ Add listing",profile:"My account",home:"Home",navSearch:"Search",navSaved:"Saved",navAdd:"Add",navProfile:"Profile",form:"Create a listing",title:"Title",category:"Category",description:"Description",location:"Location",contact:"Contact (optional)",titleHint:"Enter a title",descriptionHint:"Write a full description...",locationHint:"City or country",contactHint:"Email or contact ID",cancel:"Cancel",submit:"Publish listing",details:"Details",save:"♡ Save",savedLabel:"♥ Saved",delete:"🗑 Delete",empty:"No listings found. You can add the first one.",confirm:"Are you sure you want to delete this listing?",place:"Location",unknown:"Not specified",noContact:"No contact information provided.",profileWelcome:"Welcome to the PiLoop community.",registered:"Your listings",favorites:"Favorites",piNotice:"Real Pi login and online accounts are not yet configured.",close:"Close",categoriesList:["Services","Products","Digital Work","Community","Partnerships","Learning","Events","Giving Help"],sample:["Introduce your professional services and find service providers.","Discover products and businesses and connect with sellers.","Find partners for design, programming and digital content.","Meet other users and share your experiences.","Find partners for new ideas and business projects.","Teach your skills or discover learning opportunities.","Discover meetups, webinars and educational events.","Discover campaigns supporting families, children and emergency relief."]},
+ku:{
+dir:"rtl",name:"کوردی",hero:"جیهانێک بۆ پەیوەندی و دەرفەت",intro:"بازرگانی، خزمەتگوزاری، فێربوون و هاوکاری لە کۆمەڵگەیەکی جیهانی بدۆزەرەوە.",
+search:"گەڕان",searchHint:"گەڕان بۆ خزمەتگوزاری و بەرهەم...",categories:"بەشەکان",eight:"٨ بەشی سەرەکی",latest:"نوێترین بابەتەکان",all:"هەموو",saved:"دڵخوازەکان",mine:"بابەتەکانم",add:"+ زیادکردنی بابەت",profile:"هەژمارەکەم",home:"سەرەتا",navSearch:"گەڕان",navSaved:"پاشەکەوت",navAdd:"زیادکردن",navProfile:"پرۆفایل",form:"تۆمارکردنی بابەت",title:"ناونیشان",category:"بەش",description:"وەسف",location:"شوێن",contact:"پەیوەندی (ئارەزوومەندانە)",titleHint:"ناونیشان بنووسە",descriptionHint:"وردەکاری بنووسە...",locationHint:"شار یان وڵات",contactHint:"ئیمەیڵ یان ناسنامە",cancel:"پاشگەزبوونەوە",submit:"تۆمارکردن",details:"وردەکاری",save:"♡ پاشەکەوت",savedLabel:"♥ پاشەکەوتکراوە",delete:"🗑 سڕینەوە",empty:"هیچ بابەتێک نەدۆزرایەوە.",confirm:"دڵنیایت لە سڕینەوەی ئەم بابەتە؟",place:"شوێن",unknown:"دیاری نەکراوە",noContact:"زانیاری پەیوەندی نییە.",profileWelcome:"بەخێربێیت بۆ کۆمەڵگەی PiLoop.",registered:"بابەتە تۆمارکراوەکان",favorites:"دڵخوازەکان",piNotice:"چوونەژوورەوەی ڕاستەقینە بە Pi هێشتا چالاک نەکراوە.",close:"داخستن",categoriesList:["خزمەتگوزاری","بەرهەمەکان","کاری دیجیتاڵ","کۆمەڵگە","هاوکاری","فێربوون","ڕووداوەکان","یارمەتیدان"],sample:["خزمەتگوزارییە پیشەییەکانت بناسێنە.","بەرهەم و بازرگانییەکان بدۆزەرەوە.","هاوکار بۆ دیزاین و بەرنامەسازی بدۆزەرەوە.","لەگەڵ بەکارهێنەرانی تر ئاشنا ببە.","هاوبەش بۆ پڕۆژە نوێکان بدۆزەرەوە.","تواناکانت فێر بکە یان فێربە.","کۆبوونەوە و ڕووداوەکان بناسێنە.","هەوڵەکانی یارمەتیدانی خێزان و منداڵان بناسێنە."]},
+ar:{
+dir:"rtl",name:"العربية",hero:"عالم من التواصل والفرص",intro:"اكتشف الأعمال والخدمات والتعلم والتعاون والمساعدة ضمن مجتمع عالمي.",
+search:"بحث",searchHint:"ابحث عن الخدمات والمنتجات والفرص...",categories:"الأقسام",eight:"٨ أقسام رئيسية",latest:"أحدث الإعلانات",all:"الكل",saved:"المفضلة",mine:"إعلاناتي",add:"+ إضافة إعلان",profile:"حسابي",home:"الرئيسية",navSearch:"بحث",navSaved:"المحفوظات",navAdd:"إضافة",navProfile:"الملف الشخصي",form:"إضافة إعلان جديد",title:"العنوان",category:"القسم",description:"الوصف",location:"الموقع",contact:"وسيلة التواصل (اختياري)",titleHint:"اكتب العنوان",descriptionHint:"اكتب وصفاً كاملاً...",locationHint:"المدينة أو الدولة",contactHint:"البريد الإلكتروني أو وسيلة التواصل",cancel:"إلغاء",submit:"نشر الإعلان",details:"التفاصيل",save:"♡ حفظ",savedLabel:"♥ محفوظ",delete:"🗑 حذف",empty:"لم يتم العثور على نتائج. يمكنك إضافة أول إعلان.",confirm:"هل أنت متأكد من حذف هذا الإعلان؟",place:"الموقع",unknown:"غير محدد",noContact:"لا توجد معلومات للتواصل.",profileWelcome:"مرحباً بك في مجتمع PiLoop.",registered:"إعلاناتك",favorites:"المفضلة",piNotice:"تسجيل الدخول الحقيقي عبر Pi والحسابات الإلكترونية غير مفعّل بعد.",close:"إغلاق",categoriesList:["الخدمات","المنتجات","العمل الرقمي","المجتمع","فرص التعاون","التعلم","الفعاليات","المساعدة"],sample:["عرّف بخدماتك المهنية واعثر على مقدمي الخدمات.","اكتشف المنتجات والمتاجر وتواصل مع البائعين.","ابحث عن شركاء للتصميم والبرمجة والمحتوى الرقمي.","تعرّف على مستخدمين آخرين وشارك خبراتك.","ابحث عن شركاء للأفكار والمشاريع الجديدة.","علّم مهاراتك أو اكتشف فرص التعلم.","اكتشف اللقاءات والندوات والفعاليات التعليمية.","اكتشف حملات دعم العائلات والأطفال والإغاثة."]},
+tr:{
+dir:"ltr",name:"Türkçe",hero:"Bağlantı ve fırsatlarla dolu bir dünya",intro:"İşletmeleri, hizmetleri, eğitimi, iş birliklerini ve yardım kampanyalarını keşfet.",
+search:"Ara",searchHint:"Hizmet, ürün ve fırsat ara...",categories:"Kategoriler",eight:"8 ana bölüm",latest:"Son ilanlar",all:"Tümü",saved:"Favoriler",mine:"İlanlarım",add:"+ Yeni ilan",profile:"Hesabım",home:"Ana sayfa",navSearch:"Ara",navSaved:"Kaydedilenler",navAdd:"Ekle",navProfile:"Profil",form:"Yeni ilan oluştur",title:"Başlık",category:"Kategori",description:"Açıklama",location:"Konum",contact:"İletişim (isteğe bağlı)",titleHint:"Bir başlık yazın",descriptionHint:"Ayrıntılı açıklama yazın...",locationHint:"Şehir veya ülke",contactHint:"E-posta veya iletişim bilgisi",cancel:"İptal",submit:"İlanı yayınla",details:"Detaylar",save:"♡ Kaydet",savedLabel:"♥ Kaydedildi",delete:"🗑 Sil",empty:"Sonuç bulunamadı. İlk ilanı sen ekleyebilirsin.",confirm:"Bu ilanı silmek istediğinden emin misin?",place:"Konum",unknown:"Belirtilmedi",noContact:"İletişim bilgisi yok.",profileWelcome:"PiLoop topluluğuna hoş geldin.",registered:"İlanlarım",favorites:"Favoriler",piNotice:"Gerçek Pi girişi ve çevrimiçi hesaplar henüz etkin değil.",close:"Kapat",categoriesList:["Hizmetler","Ürünler","Dijital İşler","Topluluk","İş Birlikleri","Eğitim","Etkinlikler","Yardım"],sample:["Profesyonel hizmetlerini tanıt ve hizmet sağlayıcıları bul.","Ürünleri ve işletmeleri keşfet, satıcılarla iletişim kur.","Tasarım, yazılım ve dijital içerik için ortak bul.","Diğer kullanıcılarla tanış ve deneyimlerini paylaş.","Yeni fikirler ve projeler için ortak bul.","Becerilerini öğret veya öğrenme fırsatları bul.","Toplantıları, web seminerlerini ve eğitim etkinliklerini keşfet.","Ailelere, çocuklara ve acil yardıma destek kampanyalarını keşfet."]},
+de:{
+dir:"ltr",name:"Deutsch",hero:"Eine Welt voller Kontakte und Chancen",intro:"Entdecke Unternehmen, Dienstleistungen, Lernen, Zusammenarbeit und Hilfsangebote.",
+search:"Suchen",searchHint:"Dienstleistungen, Produkte und Chancen suchen...",categories:"Kategorien",eight:"8 Hauptbereiche",latest:"Neueste Einträge",all:"Alle",saved:"Favoriten",mine:"Meine Einträge",add:"+ Eintrag erstellen",profile:"Mein Konto",home:"Startseite",navSearch:"Suche",navSaved:"Gespeichert",navAdd:"Hinzufügen",navProfile:"Profil",form:"Neuen Eintrag erstellen",title:"Titel",category:"Kategorie",description:"Beschreibung",location:"Standort",contact:"Kontakt (optional)",titleHint:"Titel eingeben",descriptionHint:"Beschreibung eingeben...",locationHint:"Stadt oder Land",contactHint:"E-Mail oder Kontakt-ID",cancel:"Abbrechen",submit:"Veröffentlichen",details:"Details",save:"♡ Speichern",savedLabel:"♥ Gespeichert",delete:"🗑 Löschen",empty:"Keine Einträge gefunden. Erstelle den ersten Eintrag.",confirm:"Möchtest du diesen Eintrag wirklich löschen?",place:"Standort",unknown:"Nicht angegeben",noContact:"Keine Kontaktdaten vorhanden.",profileWelcome:"Willkommen in der PiLoop-Community.",registered:"Deine Einträge",favorites:"Favoriten",piNotice:"Echte Pi-Anmeldung und Online-Konten sind noch nicht eingerichtet.",close:"Schließen",categoriesList:["Dienstleistungen","Produkte","Digitale Arbeit","Community","Partnerschaften","Lernen","Veranstaltungen","Hilfe"],sample:["Stelle deine professionellen Dienstleistungen vor.","Entdecke Produkte und Unternehmen und kontaktiere Anbieter.","Finde Partner für Design, Programmierung und digitale Inhalte.","Lerne andere Nutzer kennen und teile deine Erfahrungen.","Finde Partner für neue Ideen und Projekte.","Teile deine Fähigkeiten oder entdecke Lernmöglichkeiten.","Entdecke Treffen, Webinare und Bildungsangebote.","Entdecke Hilfsaktionen für Familien, Kinder und Notfälle."]},
+fr:{
+dir:"ltr",name:"Français",hero:"Un monde de connexions et d'opportunités",intro:"Découvrez des entreprises, services, formations, collaborations et initiatives solidaires.",
+search:"Rechercher",searchHint:"Rechercher des services, produits et opportunités...",categories:"Catégories",eight:"8 sections principales",latest:"Dernières annonces",all:"Tout",saved:"Favoris",mine:"Mes annonces",add:"+ Ajouter une annonce",profile:"Mon compte",home:"Accueil",navSearch:"Recherche",navSaved:"Favoris",navAdd:"Ajouter",navProfile:"Profil",form:"Créer une annonce",title:"Titre",category:"Catégorie",description:"Description",location:"Lieu",contact:"Contact (facultatif)",titleHint:"Saisissez un titre",descriptionHint:"Écrivez une description complète...",locationHint:"Ville ou pays",contactHint:"E-mail ou identifiant",cancel:"Annuler",submit:"Publier",details:"Détails",save:"♡ Enregistrer",savedLabel:"♥ Enregistré",delete:"🗑 Supprimer",empty:"Aucun résultat. Vous pouvez créer la première annonce.",confirm:"Voulez-vous vraiment supprimer cette annonce ?",place:"Lieu",unknown:"Non précisé",noContact:"Aucune information de contact.",profileWelcome:"Bienvenue dans la communauté PiLoop.",registered:"Vos annonces",favorites:"Favoris",piNotice:"La connexion réelle avec Pi et les comptes en ligne ne sont pas encore activés.",close:"Fermer",categoriesList:["Services","Produits","Travail numérique","Communauté","Partenariats","Apprentissage","Événements","Solidarité"],sample:["Présentez vos services professionnels et trouvez des prestataires.","Découvrez des produits et contactez les vendeurs.","Trouvez des partenaires en design, programmation et contenu numérique.","Rencontrez d'autres utilisateurs et partagez vos expériences.","Trouvez des partenaires pour de nouveaux projets.","Enseignez vos compétences ou découvrez des formations.","Découvrez des rencontres, webinaires et événements éducatifs.","Découvrez des campagnes de soutien aux familles et aux enfants."]},
+es:{
+dir:"ltr",name:"Español",hero:"Un mundo de conexiones y oportunidades",intro:"Descubre negocios, servicios, aprendizaje, colaboraciones y campañas de ayuda.",
+search:"Buscar",searchHint:"Buscar servicios, productos y oportunidades...",categories:"Categorías",eight:"8 secciones principales",latest:"Publicaciones recientes",all:"Todo",saved:"Favoritos",mine:"Mis publicaciones",add:"+ Crear publicación",profile:"Mi cuenta",home:"Inicio",navSearch:"Buscar",navSaved:"Guardados",navAdd:"Añadir",navProfile:"Perfil",form:"Crear publicación",title:"Título",category:"Categoría",description:"Descripción",location:"Ubicación",contact:"Contacto (opcional)",titleHint:"Escribe un título",descriptionHint:"Escribe una descripción completa...",locationHint:"Ciudad o país",contactHint:"Correo o identificador",cancel:"Cancelar",submit:"Publicar",details:"Detalles",save:"♡ Guardar",savedLabel:"♥ Guardado",delete:"🗑 Eliminar",empty:"No se encontraron resultados. Puedes crear la primera publicación.",confirm:"¿Seguro que quieres eliminar esta publicación?",place:"Ubicación",unknown:"No especificada",noContact:"No hay información de contacto.",profileWelcome:"Te damos la bienvenida a la comunidad PiLoop.",registered:"Tus publicaciones",favorites:"Favoritos",piNotice:"El inicio de sesión real con Pi y las cuentas en línea aún no están activados.",close:"Cerrar",categoriesList:["Servicios","Productos","Trabajo digital","Comunidad","Colaboraciones","Aprendizaje","Eventos","Ayuda"],sample:["Presenta tus servicios profesionales y encuentra proveedores.","Descubre productos y negocios y contacta con vendedores.","Encuentra colaboradores para diseño, programación y contenido digital.","Conoce a otros usuarios y comparte experiencias.","Encuentra socios para nuevas ideas y proyectos.","Enseña tus habilidades o encuentra oportunidades de aprendizaje.","Descubre reuniones, seminarios y eventos educativos.","Descubre campañas de apoyo a familias, niños y emergencias."]},
+zh:{
+dir:"ltr",name:"中文",hero:"连接世界，发现更多机会",intro:"在全球社区中发现企业、服务、学习、合作与公益项目。",
+search:"搜索",searchHint:"搜索服务、产品和机会...",categories:"分类",eight:"八个主要板块",latest:"最新发布",all:"全部",saved:"收藏",mine:"我的发布",add:"+ 发布新内容",profile:"我的账户",home:"首页",navSearch:"搜索",navSaved:"收藏",navAdd:"发布",navProfile:"个人资料",form:"发布新内容",title:"标题",category:"分类",description:"描述",location:"地点",contact:"联系方式（选填）",titleHint:"输入标题",descriptionHint:"填写详细描述...",locationHint:"城市或国家",contactHint:"电子邮箱或联系方式",cancel:"取消",submit:"发布",details:"详情",save:"♡ 收藏",savedLabel:"♥ 已收藏",delete:"🗑 删除",empty:"没有找到内容。你可以发布第一条内容。",confirm:"确定要删除这条内容吗？",place:"地点",unknown:"未填写",noContact:"未提供联系方式。",profileWelcome:"欢迎加入 PiLoop 社区。",registered:"我的发布",favorites:"收藏",piNotice:"Pi 真实登录和在线账户功能尚未启用。",close:"关闭",categoriesList:["服务","产品","数字工作","社区","合作机会","学习","活动","公益帮助"],sample:["介绍你的专业服务并寻找服务提供者。","发现产品和商家，并联系卖家。","寻找设计、编程和数字内容方面的合作伙伴。","认识其他用户并分享经验。","为新想法和项目寻找合作伙伴。","分享技能或发现学习机会。","发现聚会、网络研讨会和教育活动。","发现支持家庭、儿童和紧急救助的公益活动。"]},
+ja:{
+dir:"ltr",name:"日本語",hero:"つながりとチャンスが広がる世界",intro:"世界のコミュニティで企業、サービス、学習、協力、支援活動を見つけましょう。",
+search:"検索",searchHint:"サービス、商品、機会を検索...",categories:"カテゴリー",eight:"8つのメインカテゴリー",latest:"最新の投稿",all:"すべて",saved:"お気に入り",mine:"自分の投稿",add:"+ 新しい投稿",profile:"アカウント",home:"ホーム",navSearch:"検索",navSaved:"保存",navAdd:"投稿",navProfile:"プロフィール",form:"新しい投稿を作成",title:"タイトル",category:"カテゴリー",description:"説明",location:"場所",contact:"連絡先（任意）",titleHint:"タイトルを入力",descriptionHint:"詳しい説明を入力...",locationHint:"都市または国",contactHint:"メールまたは連絡先ID",cancel:"キャンセル",submit:"投稿する",details:"詳細",save:"♡ 保存",savedLabel:"♥ 保存済み",delete:"🗑 削除",empty:"投稿が見つかりません。最初の投稿を作成できます。",confirm:"この投稿を削除してもよろしいですか？",place:"場所",unknown:"未指定",noContact:"連絡先情報はありません。",profileWelcome:"PiLoopコミュニティへようこそ。",registered:"自分の投稿",favorites:"お気に入り",piNotice:"Piによる実際のログインとオンラインアカウントはまだ有効ではありません。",close:"閉じる",categoriesList:["サービス","商品","デジタルワーク","コミュニティ","協業の機会","学習","イベント","支援"],sample:["専門サービスを紹介し、サービス提供者を見つけましょう。","商品や店舗を見つけて販売者に連絡しましょう。","デザイン、プログラミング、デジタルコンテンツの仲間を探しましょう。","ほかのユーザーと交流し、経験を共有しましょう。","新しいアイデアやプロジェクトのパートナーを探しましょう。","スキルを教えたり、学習機会を見つけたりしましょう。","交流会、ウェビナー、教育イベントを見つけましょう。","家族、子ども、緊急支援のキャンペーンを見つけましょう。"]},
+hi:{
+dir:"ltr",name:"हिन्दी",hero:"संपर्क और अवसरों की एक नई दुनिया",intro:"वैश्विक समुदाय में व्यवसाय, सेवाएँ, शिक्षा, सहयोग और सहायता अभियान खोजें।",
+search:"खोजें",searchHint:"सेवाएँ, उत्पाद और अवसर खोजें...",categories:"श्रेणियाँ",eight:"8 मुख्य अनुभाग",latest:"नवीनतम पोस्ट",all:"सभी",saved:"पसंदीदा",mine:"मेरी पोस्ट",add:"+ नई पोस्ट जोड़ें",profile:"मेरा खाता",home:"होम",navSearch:"खोजें",navSaved:"सहेजे गए",navAdd:"जोड़ें",navProfile:"प्रोफ़ाइल",form:"नई पोस्ट बनाएँ",title:"शीर्षक",category:"श्रेणी",description:"विवरण",location:"स्थान",contact:"संपर्क (वैकल्पिक)",titleHint:"शीर्षक लिखें",descriptionHint:"पूरा विवरण लिखें...",locationHint:"शहर या देश",contactHint:"ईमेल या संपर्क आईडी",cancel:"रद्द करें",submit:"प्रकाशित करें",details:"विवरण",save:"♡ सहेजें",savedLabel:"♥ सहेजा गया",delete:"🗑 हटाएँ",empty:"कोई परिणाम नहीं मिला। आप पहली पोस्ट जोड़ सकते हैं।",confirm:"क्या आप इस पोस्ट को हटाना चाहते हैं?",place:"स्थान",unknown:"निर्दिष्ट नहीं",noContact:"संपर्क जानकारी उपलब्ध नहीं है।",profileWelcome:"PiLoop समुदाय में आपका स्वागत है।",registered:"आपकी पोस्ट",favorites:"पसंदीदा",piNotice:"वास्तविक Pi लॉगिन और ऑनलाइन खाते अभी सक्रिय नहीं हैं।",close:"बंद करें",categoriesList:["सेवाएँ","उत्पाद","डिजिटल कार्य","समुदाय","साझेदारी","सीखना","कार्यक्रम","सहायता"],sample:["अपनी पेशेवर सेवाओं का परिचय दें और सेवा प्रदाता खोजें।","उत्पाद और व्यवसाय खोजें और विक्रेताओं से संपर्क करें।","डिज़ाइन, प्रोग्रामिंग और डिजिटल सामग्री के लिए साथी खोजें।","अन्य उपयोगकर्ताओं से मिलें और अनुभव साझा करें।","नए विचारों और परियोजनाओं के लिए साझेदार खोजें।","अपने कौशल सिखाएँ या सीखने के अवसर खोजें।","बैठकों, वेबिनार और शैक्षिक कार्यक्रमों की जानकारी पाएँ।","परिवारों, बच्चों और आपातकालीन सहायता अभियानों को खोजें।"]}
+};
+
+let lang=localStorage.getItem("piloop_language")||"fa";
+let currentView="all";
+let activeCategory="all";
+let selectedId=null;
+
+function t(){return translations[lang]||translations.fa}
+function getItems(){
+ try{return JSON.parse(localStorage.getItem("piloop_items_v2"))||[]}
+ catch(e){return []}
+}
+function setItems(data){localStorage.setItem("piloop_items_v2",JSON.stringify(data))}
+function getSaved(){
+ try{return JSON.parse(localStorage.getItem("piloop_saved_v2"))||[]}
+ catch(e){return []}
+}
+function setSaved(data){localStorage.setItem("piloop_saved_v2",JSON.stringify(data))}
+function demoItems(){
+ return t().categoriesList.map((name,i)=>({
+  id:"demo"+(i+1),
+  title:name,
+  category:["services","products","digital","community","opportunities","learning","events","help"][i],
+  description:t().sample[i],
+  location:lang==="fa"?"جهانی":lang==="ar"?"عالمي":"Global"
+ }));
+}
+function allItems(){
+ const data=getItems();
+ const mine=data.filter(x=>x.owner==="mine");
+ return [...mine,...demoItems()];
+}
+function applyLanguage(){
+ const d=t();
+ document.documentElement.lang=lang;
+ document.documentElement.dir=d.dir;
+ document.title="PiLoop";
+ document.getElementById("languageSelect").value=lang;
+ document.getElementById("heroTitle").textContent=d.hero;
+ document.getElementById("heroText").textContent=d.intro;
+ document.getElementById("search").placeholder=d.searchHint;
+ document.getElementById("searchButton").textContent=d.search;
+ document.getElementById("categoriesTitle").textContent=d.categories;
+ document.getElementById("categoryCount").textContent=d.eight;
+ document.getElementById("listHeading").textContent=d.latest;
+ document.getElementById("filterAll").textContent=d.all;
+ document.getElementById("filterSaved").textContent="♥ "+d.saved;
+ document.getElementById("filterMine").textContent=d.mine;
+ document.getElementById("addButton").textContent=d.add;
+ document.getElementById("profileButton").textContent="👤 "+d.profile;
+ document.getElementById("navHome").textContent=d.home;
+ document.getElementById("navSearch").textContent=d.navSearch;
+ document.getElementById("navSaved").textContent=d.navSaved;
+ document.getElementById("navAdd").textContent=d.navAdd;
+ document.getElementById("navProfile").textContent=d.navProfile;
+ document.getElementById("formHeading").textContent=d.form;
+ document.getElementById("labelTitle").textContent=d.title;
+ document.getElementById("labelCategory").textContent=d.category;
+ document.getElementById("labelDescription").textContent=d.description;
+ document.getElementById("labelLocation").textContent=d.location;
+ document.getElementById("labelContact").textContent=d.contact;
+ document.getElementById("title").placeholder=d.titleHint;
+ document.getElementById("description").placeholder=d.descriptionHint;
+ document.getElementById("location").placeholder=d.locationHint;
+ document.getElementById("contact").placeholder=d.contactHint;
+ document.getElementById("cancelButton").textContent=d.cancel;
+ document.getElementById("submitButton").textContent=d.submit;
+ document.getElementById("closeDetail").textContent=d.close;
+ document.getElementById("profileHeading").textContent=d.profile;
+ document.getElementById("profileWelcome").textContent=d.profileWelcome;
+ document.getElementById("piNotice").textContent=d.piNotice;
+ document.getElementById("closeProfile").textContent=d.close;
+ buildCategorySelect();
+ drawCategories();
+ render();
+}
+function changeLanguage(value){
+ if(!translations[value])return;
+ lang=value;
+ localStorage.setItem("piloop_language",lang);
+ applyLanguage();
+}
+function categoryKeys(){
+ return ["services","products","digital","community","opportunities","learning","events","help"];
+}
+function buildCategorySelect(){
+ const select=document.getElementById("category");
+ const old=select.value;
+ select.innerHTML="";
+ categoryKeys().forEach((key,i)=>{
+  const option=document.createElement("option");
+  option.value=key;
+  option.textContent=t().categoriesList[i];
+  select.appendChild(option);
+ });
+ if(old)select.value=old;
+}
+function drawCategories(){
+ const box=document.getElementById("categories");
+ box.innerHTML="";
+ categoryKeys().forEach((key,i)=>{
+  const b=document.createElement("button");
+  b.className="category"+(activeCategory===key?" active":"");
+  b.innerHTML=`<span class="emoji">${["🛠️","🛍️","💻","🌍","🤝","📚","🎫","💛"][i]}</span><strong></strong>`;
+  b.querySelector("strong").textContent=t().categoriesList[i];
+  b.onclick=()=>{
+   activeCategory=activeCategory===key?"all":key;
+   currentView="all";
+   document.getElementById("listHeading").textContent=activeCategory==="all"?t().latest:t().categoriesList[i];
+   drawCategories();render();
+  };
+  box.appendChild(b);
+ });
+}
+function render(){
+ const d=t();
+ const q=document.getElementById("search").value.trim().toLowerCase();
+ const saved=getSaved();
+ const data=allItems().filter(item=>{
+  const index=categoryKeys().indexOf(item.category);
+  const categoryName=index>=0?d.categoriesList[index]:"";
+  const text=[item.title,item.description,item.location,categoryName].join(" ").toLowerCase();
+  const matches=text.includes(q);
+  const cat=activeCategory==="all"||item.category===activeCategory;
+  const mode=currentView==="saved"?saved.includes(item.id):currentView==="mine"?item.owner==="mine":true;
+  return matches&&cat&&mode;
+ });
+ document.getElementById("total").textContent=data.length;
+ const box=document.getElementById("results");
+ box.innerHTML="";
+ if(!data.length){
+  const empty=document.createElement("div");
+  empty.className="empty";
+  empty.textContent=d.empty;
+  box.appendChild(empty);
+  return;
+ }
+ data.forEach(item=>{
+  const index=categoryKeys().indexOf(item.category);
+  const card=document.createElement("article");
+  card.className="card";
+  card.innerHTML=`
+   <div class="cover">${["🛠️","🛍️","💻","🌍","🤝","📚","🎫","💛"][Math.max(index,0)]}</div>
+   <div class="cardbody">
+    <h3></h3><p></p><div class="meta"></div>
+    <div class="actions">
+     <button class="view"></button>
+     <button class="fav"></button>
+    </div>
+   </div>`;
+  card.querySelector("h3").textContent=item.title;
+  card.querySelector(".cardbody p").textContent=item.description;
+  card.querySelector(".meta").textContent=(d.place+": "+(item.location||d.unknown));
+  card.querySelector(".view").textContent=d.details;
+  card.querySelector(".view").onclick=()=>detail(item.id);
+  card.querySelector(".fav").textContent=saved.includes(item.id)?d.savedLabel:d.save;
+  card.querySelector(".fav").onclick=()=>toggleSaved(item.id);
+  if(item.owner==="mine"){
+   const del=document.createElement("button");
+   del.className="delete";
+   del.textContent=d.delete;
+   del.onclick=()=>deleteItem(item.id);
+   card.querySelector(".actions").appendChild(del);
+  }
+  box.appendChild(card);
+ });
+}
+function changeView(v,button){
+ currentView=v;activeCategory="all";
+ document.getElementById("listHeading").textContent=v==="saved"?t().saved:v==="mine"?t().mine:t().latest;
+ document.querySelectorAll(".filters button").forEach(b=>b.classList.remove("active"));
+ if(button)button.classList.add("active");
+ else document.getElementById(v==="saved"?"filterSaved":v==="mine"?"filterMine":"filterAll").classList.add("active");
+ drawCategories();render();
+}
+function home(button){
+ currentView="all";activeCategory="all";
+ document.getElementById("listHeading").textContent=t().latest;
+ document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+ button.classList.add("active");
+ document.querySelectorAll(".filters button").forEach(b=>b.classList.remove("active"));
+ document.getElementById("filterAll").classList.add("active");
+ drawCategories();render();
+}
+function searchFocus(){
+ document.getElementById("search").focus();
+ document.getElementById("search").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function toggleSaved(id){
+ let saved=getSaved();
+ saved=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];
+ setSaved(saved);render();
+}
+function openAdd(){
+ buildCategorySelect();
+ document.getElementById("addModal").classList.add("show");
+}
+document.getElementById("addForm").addEventListener("submit",e=>{
+ e.preventDefault();
+ const item={
+  id:"user_"+Date.now(),
+  title:document.getElementById("title").value.trim(),
+  category:document.getElementById("category").value,
+  description:document.getElementById("description").value.trim(),
+  location:document.getElementById("location").value.trim(),
+  contact:document.getElementById("contact").value.trim(),
+  owner:"mine"
+ };
+ if(!item.title||!item.description)return;
+ const items=getItems();
+ items.unshift(item);setItems(items);
+ e.target.reset();closeModal("addModal");
+ changeView("mine",null);
+});
+function deleteItem(id){
+ if(!confirm(t().confirm))return;
+ setItems(getItems().filter(x=>x.id!==id));
+ setSaved(getSaved().filter(x=>x!==id));
+ render();
+}
+function detail(id){
+ const item=allItems().find(x=>x.id===id);
+ if(!item)return;
+ selectedId=id;
+ const index=categoryKeys().indexOf(item.category);
+ document.getElementById("detailTitle").textContent=item.title;
+ document.getElementById("detailCategory").textContent=index>=0?t().categoriesList[index]:"";
+ document.getElementById("detailDescription").textContent=item.description;
+ document.getElementById("detailLocation").textContent=t().place+": "+(item.location||t().unknown);
+ document.getElementById("detailContact").textContent=item.contact?t().contact+": "+item.contact:t().noContact;
+ document.getElementById("detailFavorite").textContent=getSaved().includes(id)?t().savedLabel:t().save;
+ document.getElementById("detailFavorite").onclick=()=>{toggleSaved(id);detail(id)};
+ document.getElementById("detailModal").classList.add("show");
+}
+function profile(){
+ const mine=getItems().filter(x=>x.owner==="mine").length;
+ document.getElementById("stats").textContent=t().registered+": "+mine+" | "+t().favorites+": "+getSaved().length;
+ document.getElementById("profileModal").classList.add("show");
+}
+function closeModal(id){document.getElementById(id).classList.remove("show")}
+document.querySelectorAll(".modal").forEach(m=>{
+ m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")});
+});
+applyLanguage();
+</script>
+</body>
+</html>
