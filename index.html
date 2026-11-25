@@ -460,3 +460,56 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
 }  
 </script>  </body>  
 </html>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<script>
+(function(){
+ const button = document.createElement("button");
+ button.className = "profile-btn";
+ button.id = "piLoginButton";
+ button.textContent = "π ورود با Pi";
+ document.querySelector(".header-tools").appendChild(button);
+
+ const notice = document.getElementById("piNotice");
+ let piUser = null;
+
+ function updatePi(){
+  button.textContent = piUser
+   ? "π " + piUser
+   : lang === "fa" ? "π ورود با Pi" : "π Sign in with Pi";
+
+  notice.textContent = piUser
+   ? "Pi: " + piUser
+   : lang === "fa" ? "با حساب پای وارد شوید." : "Sign in with your Pi account.";
+ }
+
+ button.onclick = async function(){
+  button.disabled = true;
+  try {
+   if(!window.Pi) throw new Error("Pi SDK not loaded");
+
+   Pi.init({version:"2.0",sandbox:false});
+
+   const auth = await Pi.authenticate(
+    ["username"],
+    function(payment){
+     console.warn("Incomplete payment");
+    }
+   );
+
+   piUser = auth.user.username;
+   updatePi();
+   profile();
+
+  } catch(error){
+   alert("Pi Error: " + error.message);
+  } finally {
+   button.disabled = false;
+  }
+ };
+
+ document.getElementById("languageSelect")
+ .addEventListener("change",updatePi);
+
+ updatePi();
+})();
+</script>
