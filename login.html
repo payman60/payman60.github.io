@@ -1,1 +1,44 @@
 
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiLoop Login Test</title>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+</head>
+<body style="background:#51249b;color:white;text-align:center;padding:30px;font-family:Arial">
+
+<h1>PiLoop</h1>
+<h2>آزمایش ورود با پای</h2>
+
+<button onclick="login()" style="background:#edbd50;padding:15px 30px;border:0;border-radius:12px;font-size:20px">
+π ورود با Pi
+</button>
+
+<p id="status">آماده آزمایش</p>
+
+<script>
+async function login(){
+ const status = document.getElementById("status");
+ try {
+  if (!window.Pi) {
+   throw new Error("Pi SDK not loaded");
+  }
+  Pi.init({version:"2.0",sandbox:false});
+  status.textContent = "در حال اتصال...";
+  const auth = await Pi.authenticate(
+   ["username"],
+   function(payment){
+    status.textContent = "Incomplete payment";
+   }
+  );
+  status.textContent = "Welcome: " + auth.user.username;
+ } catch(error) {
+  status.textContent = "Error: " + error.message;
+ }
+}
+</script>
+</body>
+</html>
+
