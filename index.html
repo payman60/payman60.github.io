@@ -97,7 +97,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
   <p id="heroText"></p>
   <div class="search">
    <input id="search" oninput="render()">
-   <button id="searchButton" onclick="render()"></button>
+   <button id="searchButton" onclick="runSearch()"></button>
   </div>
  </div>
 </header>
@@ -320,19 +320,29 @@ function drawCategories(){
    activeCategory=activeCategory===key?"all":key;
    currentView="all";
    document.getElementById("listHeading").textContent=activeCategory==="all"?t().latest:t().categoriesList[i];
-   drawCategories();render();
+   document.getElementById("search").value="";
+    document.querySelectorAll(".filters button").forEach(b=>b.classList.toggle("active",b.id==="filterAll"));
+    drawCategories();render();showResults();
   };
   box.appendChild(b);
  });
 }
+function showResults(){document.getElementById("listHeading").scrollIntoView({behavior:"smooth",block:"start"});}
+function runSearch(){
+ currentView="all";activeCategory="all";
+ document.getElementById("listHeading").textContent=t().latest;
+ document.querySelectorAll(".filters button").forEach(b=>b.classList.toggle("active",b.id==="filterAll"));
+ drawCategories();render();showResults();
+}
+function normalizeSearch(v){return String(v||"").normalize("NFKC").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/[\u200c\u200d]/g," ").replace(/\s+/g," ").trim().toLowerCase();}
 function render(){
  const d=t();
- const q=document.getElementById("search").value.trim().toLowerCase();
+ const q=normalizeSearch(document.getElementById("search").value);
  const saved=getSaved();
  const data=allItems().filter(item=>{
   const index=categoryKeys().indexOf(item.category);
   const categoryName=index>=0?d.categoriesList[index]:"";
-  const text=[item.title,item.description,item.location,categoryName].join(" ").toLowerCase();
+  const text=normalizeSearch([item.title,item.description,item.location,categoryName].join(" "));
   const matches=text.includes(q);
   const cat=activeCategory==="all"||item.category===activeCategory;
   const mode=currentView==="saved"?saved.includes(item.id):currentView==="mine"?item.owner==="mine":true;
@@ -363,7 +373,7 @@ function render(){
    </div>`;
   card.querySelector("h3").textContent=item.title;
   card.querySelector(".cardbody p").textContent=item.description;
-  card.querySelector(".meta").textContent=(d.place+": "+(item.location||d.unknown));
+  card.querySelector(".meta").textContent=(item.id.startsWith("demo")?"DEMO · ":"")+(d.place+": "+(item.location||d.unknown));
   card.querySelector(".view").textContent=d.details;
   card.querySelector(".view").onclick=()=>detail(item.id);
   card.querySelector(".fav").textContent=saved.includes(item.id)?d.savedLabel:d.save;
@@ -379,7 +389,7 @@ function render(){
  });
 }
 function changeView(v,button){
- currentView=v;activeCategory="all";
+ currentView=v;activeCategory="all";document.getElementById("search").value="";
  document.getElementById("listHeading").textContent=v==="saved"?t().saved:v==="mine"?t().mine:t().latest;
  document.querySelectorAll(".filters button").forEach(b=>b.classList.remove("active"));
  if(button)button.classList.add("active");
@@ -387,7 +397,8 @@ function changeView(v,button){
  drawCategories();render();
 }
 function home(button){
- currentView="all";activeCategory="all";
+ currentView="all";activeCategory="all";document.getElementById("search").value="";
+ window.scrollTo({top:0,behavior:"smooth"});
  document.getElementById("listHeading").textContent=t().latest;
  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
  button.classList.add("active");
@@ -454,6 +465,7 @@ function closeModal(id){document.getElementById(id).classList.remove("show")}
 document.querySelectorAll(".modal").forEach(m=>{
  m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")});
 });
+document.getElementById("search").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runSearch();}});
 applyLanguage();
 </script>
 </body>
