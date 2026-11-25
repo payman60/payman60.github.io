@@ -110,9 +110,9 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
   <span class="small" id="total"></span>
  </div>
  <div class="filters">
-  <button id="filterAll" class="active" onclick="changeView('all',this)"></button>
-  <button id="filterSaved" onclick="changeView('saved',this)"></button>
-  <button id="filterMine" onclick="changeView('mine',this)"></button>
+  <button id="filterAll" class="active" ></button>
+  <button id="filterSaved" ></button>
+  <button id="filterMine" ></button>
  </div>
  <div class="cards" id="results"></div>
  <footer>PiLoop · Connect · Discover · Collaborate</footer>
@@ -123,7 +123,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
 <nav>
  <button class="active" onclick="home(this)"><span>⌂</span><b id="navHome"></b></button>
  <button onclick="searchFocus()"><span>⌕</span><b id="navSearch"></b></button>
- <button onclick="changeView('saved',null)"><span>♥</span><b id="navSaved"></b></button>
+ <button id="savedNavButton"><span>♥</span><b id="navSaved"></b></button>
  <button onclick="openAdd()"><span>＋</span><b id="navAdd"></b></button>
  <button onclick="profile()"><span>👤</span><b id="navProfile"></b></button>
 </nav>
@@ -394,7 +394,8 @@ function changeView(v,button){
  document.querySelectorAll(".filters button").forEach(b=>b.classList.remove("active"));
  if(button)button.classList.add("active");
  else document.getElementById(v==="saved"?"filterSaved":v==="mine"?"filterMine":"filterAll").classList.add("active");
- drawCategories();render();
+ drawCategories();render();showResults();
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",v==="saved"?b.id==="savedNavButton":v==="all"&&!!b.querySelector("#navHome")));
 }
 function home(button){
  currentView="all";activeCategory="all";document.getElementById("search").value="";
@@ -467,6 +468,10 @@ document.querySelectorAll(".modal").forEach(m=>{
 });
 document.getElementById("search").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runSearch();}});
 applyLanguage();
+
+for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine","mine"],["savedNavButton","saved"]]){
+ document.getElementById(id).addEventListener("click",()=>changeView(view,id==="savedNavButton"?null:document.getElementById(id)));
+}
 </script>
 </body>
 </html>
