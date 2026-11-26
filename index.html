@@ -213,11 +213,16 @@ let onlineItems=[], onlineUser=null, loadVersion=0;
 function getItems(){return onlineItems;}
 const imageLabels={fa:'عکس آگهی (اختیاری، حداکثر ۵ مگابایت)',en:'Listing photo (optional, max 5 MB)',ku:'وێنە (ئارەزوومەندانە، ۵ MB)',ar:'صورة الإعلان (اختيارية، 5 MB)',tr:'İlan fotoğrafı (isteğe bağlı, 5 MB)',de:'Anzeigenfoto (optional, 5 MB)',fr:'Photo (facultative, 5 Mo)',es:'Foto (opcional, 5 MB)',zh:'照片（可选，最多 5 MB）',ja:'写真（任意、最大5 MB）',hi:'फ़ोटो (वैकल्पिक, अधिकतम 5 MB)'};
 const imageInput=document.getElementById('listingImage'), preview=document.getElementById('imagePreview'), clearImage=document.getElementById('clearImage');
-let previewURL=null;
-function resetImage(){if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;imageInput.value='';preview.removeAttribute('src');preview.hidden=true;clearImage.hidden=true;}
+let previewURL=null, editing=null, removePhoto=false;
+const editLabels={fa:['ویرایش آگهی','ذخیره تغییرات'],en:['Edit listing','Save changes'],ku:['دەستکاری بابەت','پاشەکەوتکردن'],ar:['تعديل الإعلان','حفظ التغييرات'],tr:['İlanı düzenle','Değişiklikleri kaydet'],de:['Eintrag bearbeiten','Änderungen speichern'],fr:['Modifier l’annonce','Enregistrer les modifications'],es:['Editar publicación','Guardar cambios'],zh:['编辑发布','保存修改'],ja:['投稿を編集','変更を保存'],hi:['पोस्ट संपादित करें','बदलाव सहेजें']};
+function editText(){return editLabels[lang]||editLabels.en;}
+function formLabels(){document.getElementById('formHeading').textContent=editing?editText()[0]:t().form;document.getElementById('submitButton').textContent=editing?editText()[1]:t().submit;}
+function clearDraft(){editing=null;removePhoto=false;resetImage();document.getElementById('addForm').reset();formLabels();}
+
+function resetImage(){preview.imageToken=null;if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;imageInput.value='';preview.removeAttribute('src');preview.hidden=true;clearImage.hidden=true;}
 function validImage(f){return ['image/jpeg','image/png','image/webp'].includes(f.type)&&f.size>0&&f.size<=5*1024*1024;}
-imageInput.onchange=()=>{const f=imageInput.files[0];if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;preview.hidden=true;clearImage.hidden=true;if(!f)return;if(!validImage(f)){resetImage();alert(message('عکس معتبر تا ۵ مگابایت انتخاب کنید.','Choose a valid JPG, PNG or WebP up to 5 MB.'));return;}previewURL=URL.createObjectURL(f);preview.src=previewURL;preview.hidden=false;clearImage.hidden=false;};
-clearImage.onclick=resetImage;
+imageInput.onchange=()=>{preview.imageToken=null;const f=imageInput.files[0];if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;preview.hidden=true;clearImage.hidden=true;if(!f)return;if(!validImage(f)){resetImage();alert(message('عکس معتبر تا ۵ مگابایت انتخاب کنید.','Choose a valid JPG, PNG or WebP up to 5 MB.'));return;}previewURL=URL.createObjectURL(f);preview.src=previewURL;preview.hidden=false;clearImage.hidden=false;};
+clearImage.onclick=()=>{resetImage();preview.imageToken=null;removePhoto=!!editing;};
 function imagePath(item){return typeof item.image_url==='string'&&item.image_url.startsWith(item.owner_id+'/')?item.image_url:null;}
 async function showImage(item,img){const path=imagePath(item), user=onlineUser;img.hidden=true;img.removeAttribute('src');if(!path)return;const token=Symbol();img.imageToken=token;try{const {data,error}=await window.piloopDB.storage.from('listing-images').createSignedUrl(path,300);if(!error&&data?.signedUrl&&img.imageToken===token&&user===onlineUser&&img.isConnected){img.src=data.signedUrl;img.hidden=false;}}catch(e){console.warn('Image unavailable',e);}}
 
@@ -291,7 +296,7 @@ function applyLanguage(){
  document.getElementById("location").placeholder=d.locationHint;  
  document.getElementById("contact").placeholder=d.contactHint;  
  document.getElementById("cancelButton").textContent=d.cancel;  
- document.getElementById("submitButton").textContent=d.submit;  
+ formLabels();  
  document.getElementById("closeDetail").textContent=d.close;  
  document.getElementById("profileHeading").textContent=d.profile;  
  document.getElementById("profileWelcome").textContent=d.profileWelcome;  
@@ -394,6 +399,7 @@ function render(){
   card.querySelector(".fav").onclick=()=>toggleSaved(item.id);
   if(item.id.startsWith("demo"))card.querySelector(".fav").style.display="none";  
   if(item.owner==="mine"){  
+   const edit=document.createElement('button');edit.textContent='✎ '+editText()[0];edit.onclick=()=>openEdit(item.id);card.querySelector('.actions').appendChild(edit);
    const del=document.createElement("button");  
    del.className="delete";  
    del.textContent=d.delete;  
@@ -443,8 +449,17 @@ async function toggleSaved(id){
  if(user===onlineUser)await refreshFavorites();
  }catch(error){alert(error.message);}finally{favoriteBusy=false;}
 }
+function openEdit(id){
+ if(document.getElementById('submitButton').disabled)return;
+ const item=onlineItems.find(x=>x.id===id&&x.owner_id===onlineUser);if(!onlineUser||!item)return;
+ clearDraft();editing={...item};buildCategorySelect();
+ for(const [field,value] of Object.entries({title:item.title,category:item.category,description:item.description,location:item.location,contact:item.contact_info}))document.getElementById(field).value=value||'';
+ formLabels();document.getElementById('addModal').classList.add('show');
+ if(imagePath(item)){clearImage.hidden=false;showImage(item,preview);}
+}
 function openAdd(){
  if(!onlineUser){alert(message("ابتدا با حساب پای وارد شوید.","Sign in with Pi first."));return;}  
+ if(document.getElementById("submitButton").disabled)return;clearDraft();
  buildCategorySelect();  
  document.getElementById("addModal").classList.add("show");  
 }  
@@ -454,13 +469,20 @@ document.getElementById("addForm").addEventListener("submit",async e=>{
  if(!onlineUser||button.disabled)return;
  const item={owner_id:onlineUser,title:document.getElementById('title').value.trim(),category:document.getElementById('category').value,description:document.getElementById('description').value.trim(),location:document.getElementById('location').value.trim(),contact_info:document.getElementById('contact').value.trim()};
  if(!item.title||!item.description)return;
- button.disabled=true;
- let uploaded=null, inserted=false;
+ button.disabled=true;document.getElementById("cancelButton").disabled=true;
+  const original=editing, removing=removePhoto;
+  let uploaded=null, inserted=false;
  try{const file=imageInput.files[0];if(file){if(!validImage(file))throw new Error('Invalid image');const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];const path=item.owner_id+'/'+crypto.randomUUID()+'.'+ext;const {error}=await window.piloopDB.storage.from('listing-images').upload(path,file,{contentType:file.type,upsert:false});if(error)throw error;uploaded=path;item.image_url=path;}
  if(onlineUser!==item.owner_id)throw new Error('Account changed');
- const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;inserted=true;resetImage();
- form.reset();closeModal('addModal');await refreshListings();changeView('mine',null);alert(message('آگهی ثبت شد و در انتظار تأیید است.','Listing submitted for approval.'));
- }catch(error){if(uploaded&&!inserted&&onlineUser===item.owner_id){await window.piloopDB.storage.from("listing-images").remove([uploaded]);}alert(error.message);}finally{button.disabled=false;}
+ if(original){
+   const {owner_id,...changes}=item;
+   if(!uploaded&&removing)changes.image_url=null;
+   const {data,error}=await window.piloopDB.from('listings').update(changes).eq('id',original.id).eq('owner_id',owner_id).select('id');
+   if(error)throw error;if(!data?.length)throw new Error('Listing not updated');
+  }else{const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;}
+  inserted=true;resetImage();
+ form.reset();closeModal('addModal');await refreshListings();changeView('mine',null);alert(original?message('تغییرات ذخیره شد.','Changes saved.'):message('آگهی ثبت شد و در انتظار تأیید است.','Listing submitted for approval.'));
+ }catch(error){if(uploaded&&!inserted&&onlineUser===item.owner_id){await window.piloopDB.storage.from("listing-images").remove([uploaded]);}alert(error.message);}finally{button.disabled=false;document.getElementById("cancelButton").disabled=false;}
 });
 async function deleteItem(id){
  if(!onlineUser||!onlineItems.some(x=>x.id===id&&x.owner==='mine')||!confirm(t().confirm))return;
@@ -487,9 +509,9 @@ function profile(){
  document.getElementById("stats").textContent=t().registered+": "+mine+" | "+t().favorites+": "+getSaved().length;  
  document.getElementById("profileModal").classList.add("show");  
 }  
-function closeModal(id){document.getElementById(id).classList.remove("show")}  
+function closeModal(id){document.getElementById(id).classList.remove("show");if(id==='addModal')clearDraft();}  
 document.querySelectorAll(".modal").forEach(m=>{  
- m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")});  
+ m.addEventListener("click",e=>{if(e.target===m&&!document.getElementById("submitButton").disabled)closeModal(m.id)});  
 });  
 document.getElementById("search").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runSearch();}});  
 applyLanguage();  
