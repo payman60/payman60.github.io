@@ -224,6 +224,17 @@ function validImage(f){return ['image/jpeg','image/png','image/webp'].includes(f
 imageInput.onchange=()=>{preview.imageToken=null;const f=imageInput.files[0];if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;preview.hidden=true;clearImage.hidden=true;if(!f)return;if(!validImage(f)){resetImage();alert(message('عکس معتبر تا ۵ مگابایت انتخاب کنید.','Choose a valid JPG, PNG or WebP up to 5 MB.'));return;}previewURL=URL.createObjectURL(f);preview.src=previewURL;preview.hidden=false;clearImage.hidden=false;};
 clearImage.onclick=()=>{resetImage();preview.imageToken=null;removePhoto=!!editing;};
 function imagePath(item){return typeof item.image_url==='string'&&item.image_url.startsWith(item.owner_id+'/')?item.image_url:null;}
+async function cleanupListingImage(path,owner){
+ if(!path||onlineUser!==owner||!path.startsWith(owner+'/'))return;
+ try{
+  const db=window.piloopDB;
+  const {data:refs,error:checkError}=await db.from('listings').select('id').eq('image_url',path).limit(1);
+  if(checkError)throw checkError;
+  if(refs.length||onlineUser!==owner)return;
+  const {error}=await db.storage.from('listing-images').remove([path]);
+  if(error)throw error;
+ }catch(error){console.warn('Image cleanup failed',error);alert(message('آگهی ذخیره یا حذف شد، اما پاک‌سازی فایل عکس ناموفق بود.','Listing change saved, but image cleanup failed.'));}
+}
 async function showImage(item,img){const path=imagePath(item), user=onlineUser;img.hidden=true;img.removeAttribute('src');if(!path)return;const token=Symbol();img.imageToken=token;try{const {data,error}=await window.piloopDB.storage.from('listing-images').createSignedUrl(path,300);if(!error&&data?.signedUrl&&img.imageToken===token&&user===onlineUser&&img.isConnected){img.src=data.signedUrl;img.hidden=false;}}catch(e){console.warn('Image unavailable',e);}}
 
 function message(fa,en){return lang==='fa'?fa:en;}
@@ -480,13 +491,16 @@ document.getElementById("addForm").addEventListener("submit",async e=>{
    const {data,error}=await window.piloopDB.from('listings').update(changes).eq('id',original.id).eq('owner_id',owner_id).select('id');
    if(error)throw error;if(!data?.length)throw new Error('Listing not updated');
   }else{const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;}
-  inserted=true;resetImage();
+  inserted=true;
+  if(original&&(uploaded||removing)&&imagePath(original)!==uploaded)await cleanupListingImage(imagePath(original),item.owner_id);
+  resetImage();
  form.reset();closeModal('addModal');await refreshListings();changeView('mine',null);alert(original?message('تغییرات ذخیره شد.','Changes saved.'):message('آگهی ثبت شد و در انتظار تأیید است.','Listing submitted for approval.'));
  }catch(error){if(uploaded&&!inserted&&onlineUser===item.owner_id){await window.piloopDB.storage.from("listing-images").remove([uploaded]);}alert(error.message);}finally{button.disabled=false;document.getElementById("cancelButton").disabled=false;}
 });
 async function deleteItem(id){
- if(!onlineUser||!onlineItems.some(x=>x.id===id&&x.owner==='mine')||!confirm(t().confirm))return;
- try{const {data,error}=await window.piloopDB.from('listings').delete().eq('id',id).eq('owner_id',onlineUser).select('id');if(error)throw error;if(!data.length)throw new Error('Listing not deleted');await refreshListings();await refreshFavorites();}catch(error){alert(error.message);}
+ const owner=onlineUser, original=onlineItems.find(x=>x.id===id&&x.owner_id===owner);
+ if(!owner||!original||!confirm(t().confirm))return;
+ try{const {data,error}=await window.piloopDB.from('listings').delete().eq('id',id).eq('owner_id',owner).select('id,image_url,owner_id');if(error)throw error;if(!data?.length)throw new Error('Listing not deleted');await cleanupListingImage(imagePath(data[0]),owner);await refreshListings();await refreshFavorites();}catch(error){alert(error.message);}
 }
 function detail(id){  
  const item=allItems().find(x=>x.id===id);  
