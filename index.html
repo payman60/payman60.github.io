@@ -133,7 +133,11 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
    <label id="labelLocation"></label>  
    <input id="location">  
    <label id="labelContact"></label>  
-   <input id="contact">  
+   <input id="contact">
+   <label id="imageLabel" for="listingImage"></label>
+   <input id="listingImage" type="file" accept="image/jpeg,image/png,image/webp">
+   <img id="imagePreview" hidden style="width:100%;max-height:220px;object-fit:contain" alt="">
+   <button type="button" class="cancel" id="clearImage" hidden>×</button>  
    <div class="dialogbuttons">  
     <button type="button" class="cancel" id="cancelButton" onclick="closeModal('addModal')"></button>  
     <button type="submit" class="primary" id="submitButton"></button>  
@@ -142,7 +146,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
  </div>  
 </div>  <div class="modal" id="detailModal">  
  <div class="dialog">  
-  <h2 id="detailTitle"></h2>  
+  <h2 id="detailTitle"></h2><img id="detailImage" hidden style="width:100%;max-height:320px;object-fit:contain" alt="">  
   <div class="small" id="detailCategory"></div>  
   <p class="detailtext" id="detailDescription"></p>  
   <p id="detailLocation" class="small"></p>  
@@ -207,11 +211,21 @@ let selectedId=null;
 function t(){return translations[lang]||translations.fa}  
 let onlineItems=[], onlineUser=null, loadVersion=0;
 function getItems(){return onlineItems;}
+const imageLabels={fa:'عکس آگهی (اختیاری، حداکثر ۵ مگابایت)',en:'Listing photo (optional, max 5 MB)',ku:'وێنە (ئارەزوومەندانە، ۵ MB)',ar:'صورة الإعلان (اختيارية، 5 MB)',tr:'İlan fotoğrafı (isteğe bağlı, 5 MB)',de:'Anzeigenfoto (optional, 5 MB)',fr:'Photo (facultative, 5 Mo)',es:'Foto (opcional, 5 MB)',zh:'照片（可选，最多 5 MB）',ja:'写真（任意、最大5 MB）',hi:'फ़ोटो (वैकल्पिक, अधिकतम 5 MB)'};
+const imageInput=document.getElementById('listingImage'), preview=document.getElementById('imagePreview'), clearImage=document.getElementById('clearImage');
+let previewURL=null;
+function resetImage(){if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;imageInput.value='';preview.removeAttribute('src');preview.hidden=true;clearImage.hidden=true;}
+function validImage(f){return ['image/jpeg','image/png','image/webp'].includes(f.type)&&f.size>0&&f.size<=5*1024*1024;}
+imageInput.onchange=()=>{const f=imageInput.files[0];if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;preview.hidden=true;clearImage.hidden=true;if(!f)return;if(!validImage(f)){resetImage();alert(message('عکس معتبر تا ۵ مگابایت انتخاب کنید.','Choose a valid JPG, PNG or WebP up to 5 MB.'));return;}previewURL=URL.createObjectURL(f);preview.src=previewURL;preview.hidden=false;clearImage.hidden=false;};
+clearImage.onclick=resetImage;
+function imagePath(item){return typeof item.image_url==='string'&&item.image_url.startsWith(item.owner_id+'/')?item.image_url:null;}
+async function showImage(item,img){const path=imagePath(item), user=onlineUser;img.hidden=true;img.removeAttribute('src');if(!path)return;const token=Symbol();img.imageToken=token;try{const {data,error}=await window.piloopDB.storage.from('listing-images').createSignedUrl(path,300);if(!error&&data?.signedUrl&&img.imageToken===token&&user===onlineUser&&img.isConnected){img.src=data.signedUrl;img.hidden=false;}}catch(e){console.warn('Image unavailable',e);}}
+
 function message(fa,en){return lang==='fa'?fa:en;}
 async function refreshListings(){
  const version=++loadVersion, db=window.piloopDB;
  if(!db)return false;
- const {data,error}=await db.from('listings').select('id,owner_id,category,title,description,location,contact_info,status').order('created_at',{ascending:false});
+ const {data,error}=await db.from('listings').select('id,owner_id,category,title,description,location,contact_info,status,image_url').order('created_at',{ascending:false});
  if(version!==loadVersion)return false;
  if(error){alert(message('خطا در دریافت آگهی‌ها: ','Unable to load listings: ')+error.message);return false;}
  onlineItems=data.map(x=>({...x,id:String(x.id),contact:x.contact_info||'',owner:onlineUser&&x.owner_id===onlineUser?'mine':'other'}));render();return true;
@@ -242,7 +256,8 @@ function allItems(){
  const mine=data;  
  return [...mine,...demoItems()];  
 }  
-function applyLanguage(){  
+function applyLanguage(){
+ document.getElementById("imageLabel").textContent=imageLabels[lang]||imageLabels.en;  
  const d=t();  
  document.documentElement.lang=lang;  
  document.documentElement.dir=d.dir;  
@@ -385,7 +400,9 @@ function render(){
    del.onclick=()=>deleteItem(item.id);  
    card.querySelector(".actions").appendChild(del);  
   }  
-  box.appendChild(card);  
+  box.appendChild(card);
+  if(imagePath(item)){const cover=card.querySelector('.cover'), img=document.createElement('img');img.alt=item.title;img.style.cssText='width:100%;height:100%;object-fit:cover;min-height:0';cover.appendChild(img);img.onload=()=>{if(cover.firstChild?.nodeType===3)cover.firstChild.remove();};showImage(item,img);}
+  
  });  
 }  
 function changeView(v,button){  
@@ -438,9 +455,12 @@ document.getElementById("addForm").addEventListener("submit",async e=>{
  const item={owner_id:onlineUser,title:document.getElementById('title').value.trim(),category:document.getElementById('category').value,description:document.getElementById('description').value.trim(),location:document.getElementById('location').value.trim(),contact_info:document.getElementById('contact').value.trim()};
  if(!item.title||!item.description)return;
  button.disabled=true;
- try{const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;
+ let uploaded=null, inserted=false;
+ try{const file=imageInput.files[0];if(file){if(!validImage(file))throw new Error('Invalid image');const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];const path=item.owner_id+'/'+crypto.randomUUID()+'.'+ext;const {error}=await window.piloopDB.storage.from('listing-images').upload(path,file,{contentType:file.type,upsert:false});if(error)throw error;uploaded=path;item.image_url=path;}
+ if(onlineUser!==item.owner_id)throw new Error('Account changed');
+ const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;inserted=true;resetImage();
  form.reset();closeModal('addModal');await refreshListings();changeView('mine',null);alert(message('آگهی ثبت شد و در انتظار تأیید است.','Listing submitted for approval.'));
- }catch(error){alert(error.message);}finally{button.disabled=false;}
+ }catch(error){if(uploaded&&!inserted&&onlineUser===item.owner_id){await window.piloopDB.storage.from("listing-images").remove([uploaded]);}alert(error.message);}finally{button.disabled=false;}
 });
 async function deleteItem(id){
  if(!onlineUser||!onlineItems.some(x=>x.id===id&&x.owner==='mine')||!confirm(t().confirm))return;
@@ -449,7 +469,8 @@ async function deleteItem(id){
 function detail(id){  
  const item=allItems().find(x=>x.id===id);  
  if(!item)return;  
- selectedId=id;  
+ selectedId=id;
+ const photo=document.getElementById("detailImage");photo.imageToken=null;showImage(item,photo);  
  const index=categoryKeys().indexOf(item.category);  
  document.getElementById("detailTitle").textContent=item.title;  
  document.getElementById("detailCategory").textContent=index>=0?t().categoriesList[index]:"";  
@@ -505,7 +526,7 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
   piUser=session?.user?.app_metadata?.pi_uid ? session.user.user_metadata?.pi_username||null : null;
   ready=true; updatePi();
   const nextUser=piUser?session.user.id:null;
-  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;onlineItems=[];onlineSaved=[];favoritesReady=false;++favoriteVersion;++loadVersion;closeModal("detailModal");render();setTimeout(()=>{refreshListings();refreshFavorites();},0);}
+  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;resetImage();closeModal('addModal');document.getElementById('detailImage').removeAttribute('src');onlineItems=[];onlineSaved=[];favoritesReady=false;++favoriteVersion;++loadVersion;closeModal("detailModal");render();setTimeout(()=>{refreshListings();refreshFavorites();},0);}
  });
  button.onclick=async function(){
   if(busy||!ready)return;
