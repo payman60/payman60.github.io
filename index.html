@@ -205,11 +205,17 @@ let activeCategory="all";
 let selectedId=null;  
   
 function t(){return translations[lang]||translations.fa}  
-function getItems(){  
- try{return JSON.parse(localStorage.getItem("piloop_items_v2"))||[]}  
- catch(e){return []}  
-}  
-function setItems(data){localStorage.setItem("piloop_items_v2",JSON.stringify(data))}  
+let onlineItems=[], onlineUser=null, loadVersion=0;
+function getItems(){return onlineItems;}
+function message(fa,en){return lang==='fa'?fa:en;}
+async function refreshListings(){
+ const version=++loadVersion, db=window.piloopDB;
+ if(!db)return false;
+ const {data,error}=await db.from('listings').select('id,owner_id,category,title,description,location,contact_info,status').order('created_at',{ascending:false});
+ if(version!==loadVersion)return false;
+ if(error){alert(message('خطا در دریافت آگهی‌ها: ','Unable to load listings: ')+error.message);return false;}
+ onlineItems=data.map(x=>({...x,id:String(x.id),contact:x.contact_info||'',owner:onlineUser&&x.owner_id===onlineUser?'mine':'other'}));render();return true;
+}
 function getSaved(){  
  try{return JSON.parse(localStorage.getItem("piloop_saved_v2"))||[]}  
  catch(e){return []}  
@@ -226,7 +232,7 @@ function demoItems(){
 }  
 function allItems(){  
  const data=getItems();  
- const mine=data.filter(x=>x.owner==="mine");  
+ const mine=data;  
  return [...mine,...demoItems()];  
 }  
 function applyLanguage(){  
@@ -359,7 +365,7 @@ function render(){
    </div>`;  
   card.querySelector("h3").textContent=item.title;  
   card.querySelector(".cardbody p").textContent=item.description;  
-  card.querySelector(".meta").textContent=(item.id.startsWith("demo")?"DEMO · ":"")+(d.place+": "+(item.location||d.unknown));  
+  card.querySelector(".meta").textContent=(item.id.startsWith("demo")?"DEMO · ":item.status==="pending"?message("در انتظار تأیید · ","Pending · "):"")+(d.place+": "+(item.location||d.unknown));  
   card.querySelector(".view").textContent=d.details;  
   card.querySelector(".view").onclick=()=>detail(item.id);  
   card.querySelector(".fav").textContent=saved.includes(item.id)?d.savedLabel:d.save;  
@@ -402,33 +408,26 @@ function toggleSaved(id){
  saved=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];  
  setSaved(saved);render();  
 }  
-function openAdd(){  
+function openAdd(){
+ if(!onlineUser){alert(message("ابتدا با حساب پای وارد شوید.","Sign in with Pi first."));return;}  
  buildCategorySelect();  
  document.getElementById("addModal").classList.add("show");  
 }  
-document.getElementById("addForm").addEventListener("submit",e=>{  
- e.preventDefault();  
- const item={  
-  id:"user_"+Date.now(),  
-  title:document.getElementById("title").value.trim(),  
-  category:document.getElementById("category").value,  
-  description:document.getElementById("description").value.trim(),  
-  location:document.getElementById("location").value.trim(),  
-  contact:document.getElementById("contact").value.trim(),  
-  owner:"mine"  
- };  
- if(!item.title||!item.description)return;  
- const items=getItems();  
- items.unshift(item);setItems(items);  
- e.target.reset();closeModal("addModal");  
- changeView("mine",null);  
-});  
-function deleteItem(id){  
- if(!confirm(t().confirm))return;  
- setItems(getItems().filter(x=>x.id!==id));  
- setSaved(getSaved().filter(x=>x!==id));  
- render();  
-}  
+document.getElementById("addForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const form=e.target, button=document.getElementById('submitButton');
+ if(!onlineUser||button.disabled)return;
+ const item={owner_id:onlineUser,title:document.getElementById('title').value.trim(),category:document.getElementById('category').value,description:document.getElementById('description').value.trim(),location:document.getElementById('location').value.trim(),contact_info:document.getElementById('contact').value.trim()};
+ if(!item.title||!item.description)return;
+ button.disabled=true;
+ try{const {error}=await window.piloopDB.from('listings').insert(item);if(error)throw error;
+ form.reset();closeModal('addModal');await refreshListings();changeView('mine',null);alert(message('آگهی ثبت شد و در انتظار تأیید است.','Listing submitted for approval.'));
+ }catch(error){alert(error.message);}finally{button.disabled=false;}
+});
+async function deleteItem(id){
+ if(!onlineUser||!onlineItems.some(x=>x.id===id&&x.owner==='mine')||!confirm(t().confirm))return;
+ try{const {data,error}=await window.piloopDB.from('listings').delete().eq('id',id).eq('owner_id',onlineUser).select('id');if(error)throw error;if(!data.length)throw new Error('Listing not deleted');setSaved(getSaved().filter(x=>x!==id));await refreshListings();}catch(error){alert(error.message);}
+}
 function detail(id){  
  const item=allItems().find(x=>x.id===id);  
  if(!item)return;  
@@ -486,6 +485,8 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
  db.auth.onAuthStateChange((event,session)=>{
   piUser=session?.user?.app_metadata?.pi_uid ? session.user.user_metadata?.pi_username||null : null;
   ready=true; updatePi();
+  const nextUser=piUser?session.user.id:null;
+  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;onlineItems=[];render();setTimeout(refreshListings,0);}
  });
  button.onclick=async function(){
   if(busy||!ready)return;
