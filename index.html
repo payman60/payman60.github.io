@@ -216,11 +216,18 @@ async function refreshListings(){
  if(error){alert(message('خطا در دریافت آگهی‌ها: ','Unable to load listings: ')+error.message);return false;}
  onlineItems=data.map(x=>({...x,id:String(x.id),contact:x.contact_info||'',owner:onlineUser&&x.owner_id===onlineUser?'mine':'other'}));render();return true;
 }
-function getSaved(){  
- try{return JSON.parse(localStorage.getItem("piloop_saved_v2"))||[]}  
- catch(e){return []}  
-}  
-function setSaved(data){localStorage.setItem("piloop_saved_v2",JSON.stringify(data))}  
+let onlineSaved=[], favoriteVersion=0, favoritesReady=false, favoriteBusy=false;
+function getSaved(){return onlineSaved;}
+async function refreshFavorites(){
+ const version=++favoriteVersion, user=onlineUser;
+ favoritesReady=false;
+ if(!user){onlineSaved=[];render();return;}
+ const {data,error}=await window.piloopDB.from('favorites').select('listing_id').eq('user_id',user);
+ if(version!==favoriteVersion||user!==onlineUser)return;
+ if(error){alert(message('خطا در دریافت علاقه‌مندی‌ها: ','Unable to load favorites: ')+error.message);return;}
+ onlineSaved=data.map(x=>String(x.listing_id));favoritesReady=true;render();
+ if(document.getElementById('profileModal').classList.contains('show'))profile();
+}
 function demoItems(){  
  return t().categoriesList.map((name,i)=>({  
   id:"demo"+(i+1),  
@@ -369,7 +376,8 @@ function render(){
   card.querySelector(".view").textContent=d.details;  
   card.querySelector(".view").onclick=()=>detail(item.id);  
   card.querySelector(".fav").textContent=saved.includes(item.id)?d.savedLabel:d.save;  
-  card.querySelector(".fav").onclick=()=>toggleSaved(item.id);  
+  card.querySelector(".fav").onclick=()=>toggleSaved(item.id);
+  if(item.id.startsWith("demo"))card.querySelector(".fav").style.display="none";  
   if(item.owner==="mine"){  
    const del=document.createElement("button");  
    del.className="delete";  
@@ -403,11 +411,21 @@ function searchFocus(){
  document.getElementById("search").focus();  
  document.getElementById("search").scrollIntoView({behavior:"smooth",block:"center"});  
 }  
-function toggleSaved(id){  
- let saved=getSaved();  
- saved=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];  
- setSaved(saved);render();  
-}  
+async function toggleSaved(id){
+ const user=onlineUser;
+ if(!user){alert(message('ابتدا با حساب پای وارد شوید.','Sign in with Pi first.'));return;}
+ if(!onlineItems.some(x=>x.id===id)){alert(message('آگهی نمونه قابل ذخیره نیست.','Demo listings cannot be saved.'));return;}
+ if(favoriteBusy)return;
+ favoriteBusy=true;
+ try{
+ if(!favoritesReady)await refreshFavorites();
+ if(!favoritesReady||user!==onlineUser)return;
+ const db=window.piloopDB;
+ const result=getSaved().includes(id)?await db.from('favorites').delete().eq('user_id',user).eq('listing_id',id):await db.from('favorites').insert({user_id:user,listing_id:id});
+ if(result.error)throw result.error;
+ if(user===onlineUser)await refreshFavorites();
+ }catch(error){alert(error.message);}finally{favoriteBusy=false;}
+}
 function openAdd(){
  if(!onlineUser){alert(message("ابتدا با حساب پای وارد شوید.","Sign in with Pi first."));return;}  
  buildCategorySelect();  
@@ -426,7 +444,7 @@ document.getElementById("addForm").addEventListener("submit",async e=>{
 });
 async function deleteItem(id){
  if(!onlineUser||!onlineItems.some(x=>x.id===id&&x.owner==='mine')||!confirm(t().confirm))return;
- try{const {data,error}=await window.piloopDB.from('listings').delete().eq('id',id).eq('owner_id',onlineUser).select('id');if(error)throw error;if(!data.length)throw new Error('Listing not deleted');setSaved(getSaved().filter(x=>x!==id));await refreshListings();}catch(error){alert(error.message);}
+ try{const {data,error}=await window.piloopDB.from('listings').delete().eq('id',id).eq('owner_id',onlineUser).select('id');if(error)throw error;if(!data.length)throw new Error('Listing not deleted');await refreshListings();await refreshFavorites();}catch(error){alert(error.message);}
 }
 function detail(id){  
  const item=allItems().find(x=>x.id===id);  
@@ -438,8 +456,9 @@ function detail(id){
  document.getElementById("detailDescription").textContent=item.description;  
  document.getElementById("detailLocation").textContent=t().place+": "+(item.location||t().unknown);  
  document.getElementById("detailContact").textContent=item.contact?t().contact+": "+item.contact:t().noContact;  
+ document.getElementById("detailFavorite").style.display=id.startsWith("demo")?"none":"";
  document.getElementById("detailFavorite").textContent=getSaved().includes(id)?t().savedLabel:t().save;  
- document.getElementById("detailFavorite").onclick=()=>{toggleSaved(id);detail(id)};  
+ document.getElementById("detailFavorite").onclick=async()=>{await toggleSaved(id);if(document.getElementById("detailModal").classList.contains("show"))detail(id)};  
  document.getElementById("detailModal").classList.add("show");  
 }  
 function profile(){  
@@ -486,7 +505,7 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
   piUser=session?.user?.app_metadata?.pi_uid ? session.user.user_metadata?.pi_username||null : null;
   ready=true; updatePi();
   const nextUser=piUser?session.user.id:null;
-  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;onlineItems=[];render();setTimeout(refreshListings,0);}
+  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;onlineItems=[];onlineSaved=[];favoritesReady=false;++favoriteVersion;++loadVersion;closeModal("detailModal");render();setTimeout(()=>{refreshListings();refreshFavorites();},0);}
  });
  button.onclick=async function(){
   if(busy||!ready)return;
