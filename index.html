@@ -70,6 +70,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
 .card.pi-featured{border:2px solid var(--gold);box-shadow:0 4px 18px #edbd5040}
 .pi-featured-label{background:var(--gold);color:#32145e;padding:5px 12px;font-size:12px;font-weight:bold}
 .actions .pi-feature-button{background:var(--gold);color:#32145e;font-weight:bold}
+.pi-feature-validity{background:#fff8e6;color:#624719;border-radius:9px;padding:8px 10px;margin-top:9px;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
 </style>  
 </head>  
 <body>  
@@ -273,6 +274,27 @@ function demoItems(){
 const featureLabels={fa:['آگهی ویژه','ویژه کردن','روز','پرداخت هنوز فعال نیست','دریافت تعرفه ناموفق بود'],en:['Featured','Promote','days','Payments not available yet','Unable to load price'],ku:['بابەتی تایبەت','تایبەتکردن','ڕۆژ','پارەدان ناچالاکە','نرخ بەردەست نییە'],ar:['إعلان مميز','تمييز الإعلان','أيام','الدفع غير متاح','تعذر تحميل السعر'],tr:['Öne çıkan','Öne çıkar','gün','Ödeme kullanılamıyor','Fiyat alınamadı'],de:['Hervorgehoben','Hervorheben','Tage','Zahlung nicht verfügbar','Preis nicht verfügbar'],fr:['À la une','Promouvoir','jours','Paiement indisponible','Tarif indisponible'],es:['Destacado','Promocionar','días','Pago no disponible','Precio no disponible'],zh:['精选','推广','天','支付暂不可用','无法获取价格'],ja:['注目','宣伝する','日','決済は利用できません','価格を取得できません'],hi:['विशेष','प्रचार करें','दिन','भुगतान उपलब्ध नहीं है','मूल्य उपलब्ध नहीं है']};
 function featureText(){return featureLabels[lang]||featureLabels.en;}
 function isFeatured(item){return item.status==='approved'&&Date.parse(item.featured_until)>Date.now();}
+const renewalLabels={
+ fa:['تمدید آگهی ویژه','روز باقی‌مانده','پایان اعتبار'],
+ en:['Renew promotion','day(s) remaining','Expires'],
+ ku:['نوێکردنەوەی بابەتی تایبەت','ڕۆژ ماوە','کۆتایی ماوە'],
+ ar:['تجديد الإعلان المميز','يوم متبقٍ','انتهاء الصلاحية'],
+ tr:['Öne çıkarmayı yenile','gün kaldı','Bitiş tarihi'],
+ de:['Hervorhebung verlängern','Tag(e) verbleibend','Gültig bis'],
+ fr:['Renouveler la mise en avant','jour(s) restant(s)','Expire le'],
+ es:['Renovar promoción','día(s) restante(s)','Vence el'],
+ zh:['续期推广','天剩余','到期时间'],
+ ja:['掲載強化を延長','日残り','有効期限'],
+ hi:['विशेष प्रचार बढ़ाएँ','दिन शेष','समाप्ति']
+};
+function renewalText(){return renewalLabels[lang]||renewalLabels.en;}
+function featureValidity(item){
+ const end=Date.parse(item.featured_until), days=Math.max(0,Math.ceil((end-Date.now())/86400000));
+ const labels=renewalText();
+ const locale={fa:'fa-IR',ku:'ckb',ar:'ar',en:'en',tr:'tr',de:'de',fr:'fr',es:'es',zh:'zh-CN',ja:'ja-JP',hi:'hi-IN'}[lang]||'en';
+ const date=new Intl.DateTimeFormat(locale,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(new Date(end));
+ return ['⏳ '+new Intl.NumberFormat(locale).format(days)+' '+labels[1],labels[2]+': '+date];
+}
 let featureBusy=false, piPaymentUser=null;
 const paymentNotice=(fa,en)=>alert(message(fa,en));
 async function paymentRequest(user,body){
@@ -299,12 +321,14 @@ async function showFeaturedSettings(id,button){
   const settings=await paymentRequest(user,{action:'settings'}), l=featureText();
   const amount=Number(settings.featured_price), days=Number(settings.featured_days);
   if(!Number.isFinite(amount)||amount<=0||!Number.isInteger(days)||days<=0)throw Error('Invalid settings');
-  const quote='⭐ '+l[0]+'\n'+amount+' Pi / '+days+' '+l[2];
+  const renewing=onlineItems.some(x=>x.id===id&&isFeatured(x));
+  const actionLabel=renewing?renewalText()[0]:l[1];
+  const quote='⭐ '+(renewing?actionLabel:l[0])+'\n'+amount+' Pi / '+days+' '+l[2];
   if(settings.payments_enabled!==true){alert(quote+'\n'+l[3]);return;}
   if(piPaymentUser!==user||!window.Pi){paymentNotice('برای پرداخت یک بار خارج شوید و دوباره با Pi وارد شوید.','Sign out and sign in with Pi again to enable payments.');return;}
   const pending=localStorage.getItem(pendingKey(user));
   if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(recovered.status!=='completed')throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}
-  if(!confirm(quote+'\nTestnet — '+l[1]+'?')||onlineUser!==user)return;
+  if(!confirm(quote+'\nTestnet — '+actionLabel+'?')||onlineUser!==user)return;
   await new Promise((resolve,reject)=>{
    let settled=false;
    const finish=(err)=>{if(settled)return;settled=true;err?reject(err):resolve();};
@@ -471,9 +495,12 @@ function render(){
   if(isFeatured(item)){
    card.classList.add('pi-featured');
    const badge=document.createElement('div');badge.className='pi-featured-label';badge.textContent='⭐ '+featureText()[0];card.prepend(badge);
+   const validity=document.createElement('div');validity.className='pi-feature-validity';
+   for(const line of featureValidity(item)){const row=document.createElement('div');row.textContent=line;validity.appendChild(row);}
+   card.querySelector('.meta').after(validity);
   }
   if(onlineUser&&item.owner_id===onlineUser&&item.status==='approved'){
-   const promote=document.createElement('button');promote.type='button';promote.className='pi-feature-button';promote.textContent='⭐ '+featureText()[1];promote.onclick=()=>showFeaturedSettings(item.id,promote);card.querySelector('.actions').appendChild(promote);
+   const promote=document.createElement('button');promote.type='button';promote.className='pi-feature-button';promote.textContent='⭐ '+(isFeatured(item)?renewalText()[0]:featureText()[1]);promote.onclick=()=>showFeaturedSettings(item.id,promote);card.querySelector('.actions').appendChild(promote);
   }
   box.appendChild(card);
   if(imagePath(item)){const cover=card.querySelector('.cover'), img=document.createElement('img');img.alt=item.title;img.style.cssText='width:100%;height:100%;object-fit:cover;min-height:0';cover.appendChild(img);img.onload=()=>{if(cover.firstChild?.nodeType===3)cover.firstChild.remove();};showImage(item,img);}
