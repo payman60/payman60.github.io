@@ -335,7 +335,15 @@ async function showFeaturedSettings(id,button){
    const callbacks={
     onReadyForServerApproval:async payment_id=>{try{await paymentRequest(user,{action:'approve',payment_id});}catch(e){paymentNotice('تأیید پرداخت ناموفق بود.','Payment approval failed.');finish(e);}},
     onReadyForServerCompletion:async(payment_id,txid)=>{try{localStorage.setItem(pendingKey(user),payment_id);const r=await paymentRequest(user,{action:'complete',payment_id,txid});if(r.status!=='completed')throw Error('Completion pending');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت تأیید شد.','Payment confirmed.');finish();}catch(e){finish(e);}},
-    onCancel:()=>finish(),
+    onCancel:async(payment_id)=>{
+     try{
+      const r=await paymentRequest(user,{action:'cancel',payment_id});
+      if(r.status!=='cancelled')throw Error('Cancellation not confirmed');
+      if(localStorage.getItem(pendingKey(user))===payment_id)localStorage.removeItem(pendingKey(user));
+      paymentNotice('پرداخت لغو شد.','Payment cancelled.');
+      finish();
+     }catch(e){finish(e);}
+    },
     onError:(err,payment)=>{if(payment?.transaction?.txid&&payment.identifier)localStorage.setItem(pendingKey(user),payment.identifier);finish(err||Error('Payment error'));}
    };
    try{Promise.resolve(Pi.createPayment({amount,memo:'PiLoop featured listing',metadata:{purpose:'featured',listing_id:id}},callbacks)).catch(finish);}catch(e){finish(e);}
