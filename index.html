@@ -273,20 +273,50 @@ function demoItems(){
 const featureLabels={fa:['آگهی ویژه','ویژه کردن','روز','پرداخت هنوز فعال نیست','دریافت تعرفه ناموفق بود'],en:['Featured','Promote','days','Payments not available yet','Unable to load price'],ku:['بابەتی تایبەت','تایبەتکردن','ڕۆژ','پارەدان ناچالاکە','نرخ بەردەست نییە'],ar:['إعلان مميز','تمييز الإعلان','أيام','الدفع غير متاح','تعذر تحميل السعر'],tr:['Öne çıkan','Öne çıkar','gün','Ödeme kullanılamıyor','Fiyat alınamadı'],de:['Hervorgehoben','Hervorheben','Tage','Zahlung nicht verfügbar','Preis nicht verfügbar'],fr:['À la une','Promouvoir','jours','Paiement indisponible','Tarif indisponible'],es:['Destacado','Promocionar','días','Pago no disponible','Precio no disponible'],zh:['精选','推广','天','支付暂不可用','无法获取价格'],ja:['注目','宣伝する','日','決済は利用できません','価格を取得できません'],hi:['विशेष','प्रचार करें','दिन','भुगतान उपलब्ध नहीं है','मूल्य उपलब्ध नहीं है']};
 function featureText(){return featureLabels[lang]||featureLabels.en;}
 function isFeatured(item){return item.status==='approved'&&Date.parse(item.featured_until)>Date.now();}
-let featureBusy=false;
+let featureBusy=false, piPaymentUser=null;
+const paymentNotice=(fa,en)=>alert(message(fa,en));
+async function paymentRequest(user,body){
+ const {data,error}=await window.piloopDB.auth.getSession();
+ if(error||!data.session||data.session.user.id!==user||onlineUser!==user)throw Error('Session unavailable');
+ const response=await fetch('https://zrawtpvuvnkrsoewhhws.supabase.co/functions/v1/pi-payment',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.session.access_token},body:JSON.stringify(body)});
+ const result=await response.json();
+ if(!response.ok||result.success!==true)throw Error(result.error||'Payment request failed');
+ return result;
+}
+function pendingKey(user){return 'piloop_pending_payment_'+user;}
+async function recoverFeatured(payment,user){
+ if(!payment?.identifier||!payment.transaction?.txid)return;
+ localStorage.setItem(pendingKey(user),payment.identifier);
+ const result=await paymentRequest(user,{action:'recover',payment_id:payment.identifier,txid:payment.transaction.txid});
+ if(result.status!=='completed')throw Error('Recovery incomplete');
+ localStorage.removeItem(pendingKey(user));await refreshListings();
+}
 async function showFeaturedSettings(id,button){
  const user=onlineUser;
  if(featureBusy||!user||!onlineItems.some(x=>x.id===id&&x.owner_id===user&&x.status==='approved'))return;
  featureBusy=true;button.disabled=true;
  try{
-  const {data,error}=await window.piloopDB.auth.getSession();
-  if(error||!data.session||data.session.user.id!==user)throw new Error('Session unavailable');
-  const response=await fetch('https://zrawtpvuvnkrsoewhhws.supabase.co/functions/v1/pi-payment',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.session.access_token},body:JSON.stringify({action:'settings'})});
-  const settings=await response.json();
-  if(!response.ok||settings.success!==true||!Number.isFinite(Number(settings.featured_price))||Number(settings.featured_price)<=0||!Number.isInteger(Number(settings.featured_days))||Number(settings.featured_days)<=0)throw new Error('Settings unavailable');
-  if(onlineUser!==user)return;
-  const l=featureText();alert('⭐ '+l[0]+'\n\n'+settings.featured_price+' Pi / '+settings.featured_days+' '+l[2]+'\n\n'+l[3]);
- }catch(e){if(onlineUser===user)alert(featureText()[4]);}finally{featureBusy=false;button.disabled=false;}
+  const settings=await paymentRequest(user,{action:'settings'}), l=featureText();
+  const amount=Number(settings.featured_price), days=Number(settings.featured_days);
+  if(!Number.isFinite(amount)||amount<=0||!Number.isInteger(days)||days<=0)throw Error('Invalid settings');
+  const quote='⭐ '+l[0]+'\n'+amount+' Pi / '+days+' '+l[2];
+  if(settings.payments_enabled!==true){alert(quote+'\n'+l[3]);return;}
+  if(piPaymentUser!==user||!window.Pi){paymentNotice('برای پرداخت یک بار خارج شوید و دوباره با Pi وارد شوید.','Sign out and sign in with Pi again to enable payments.');return;}
+  const pending=localStorage.getItem(pendingKey(user));
+  if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(recovered.status!=='completed')throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}
+  if(!confirm(quote+'\nTestnet — '+l[1]+'?')||onlineUser!==user)return;
+  await new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(err)=>{if(settled)return;settled=true;err?reject(err):resolve();};
+   const callbacks={
+    onReadyForServerApproval:async payment_id=>{try{await paymentRequest(user,{action:'approve',payment_id});}catch(e){paymentNotice('تأیید پرداخت ناموفق بود.','Payment approval failed.');finish(e);}},
+    onReadyForServerCompletion:async(payment_id,txid)=>{try{localStorage.setItem(pendingKey(user),payment_id);const r=await paymentRequest(user,{action:'complete',payment_id,txid});if(r.status!=='completed')throw Error('Completion pending');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت تأیید شد.','Payment confirmed.');finish();}catch(e){finish(e);}},
+    onCancel:()=>finish(),
+    onError:(err,payment)=>{if(payment?.transaction?.txid&&payment.identifier)localStorage.setItem(pendingKey(user),payment.identifier);finish(err||Error('Payment error'));}
+   };
+   try{Promise.resolve(Pi.createPayment({amount,memo:'PiLoop featured listing',metadata:{purpose:'featured',listing_id:id}},callbacks)).catch(finish);}catch(e){finish(e);}
+  });
+ }catch(e){if(onlineUser===user)paymentNotice('پرداخت یا بازیابی ناموفق بود. اگر مبلغ کسر شده دوباره پرداخت نکنید.','Payment or recovery failed. If charged, do not pay again.');console.warn(e);}finally{featureBusy=false;button.disabled=false;}
 }
 function allItems(){  
  const data=getItems();  
@@ -599,7 +629,8 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
   try{
    if(!window.Pi)throw new Error('Pi SDK not loaded');
    if(!initialized){Pi.init({version:'2.0',sandbox:false});initialized=true;}
-   const auth=await Pi.authenticate(['username'],()=>console.warn('Incomplete payment'));
+   const incomplete=[];
+   const auth=await Pi.authenticate(['username','payments'],p=>{incomplete.push(p);});
    const response=await fetch('https://zrawtpvuvnkrsoewhhws.supabase.co/functions/v1/pi-auth-verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessToken:auth.accessToken})});
    const verified=await response.json();
    if(!response.ok||verified.success!==true||!verified.user?.uid||!verified.user?.username||!verified.user?.profile_id)throw new Error('Pi verification failed');
@@ -607,13 +638,14 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
    const {data,error}=await db.auth.setSession({access_token:verified.session.access_token,refresh_token:verified.session.refresh_token});
    if(error||!data.session)throw new Error('Session activation failed');
    if(data.user?.id!==verified.user.profile_id||data.user?.app_metadata?.pi_uid!==verified.user.uid){await db.auth.signOut({scope:'local'});throw new Error('Account mismatch');}
-   piUser=verified.user.username;updatePi();profile();
+   piUser=verified.user.username;piPaymentUser=data.user.id;updatePi();profile();
+   for(const p of incomplete){try{await recoverFeatured(p,data.user.id);}catch(e){console.warn(e);paymentNotice('پرداخت قبلی نیاز به بازیابی دارد.','Previous payment requires recovery.');}}
   }catch(error){alert('Pi Error: '+error.message);}
   finally{busy=false;updatePi();}
  };
  logout.onclick=async function(){
-  if(busy)return;busy=true;updatePi();
-  try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;piUser=null;closeModal('profileModal');}
+  if(busy||featureBusy)return;busy=true;updatePi();
+  try{const {error}=await db.auth.signOut({scope:'local'});if(error)throw error;piUser=null;piPaymentUser=null;closeModal('profileModal');}
   catch(error){alert('Logout Error: '+error.message);}
   finally{busy=false;updatePi();}
  };
