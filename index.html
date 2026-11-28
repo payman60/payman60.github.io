@@ -305,6 +305,27 @@ async function paymentRequest(user,body){
  if(!response.ok||result.success!==true)throw Error(result.error||'Payment request failed');
  return result;
 }
+let reconciliation=null;
+async function reconcilePayments(user){
+ if(!user||onlineUser!==user)return false;
+ if(reconciliation?.user===user)return reconciliation.promise;
+ const job={user};
+ job.promise=(async()=>{
+  const r=await paymentRequest(user,{action:'reconcile'});
+  if(onlineUser!==user)return false;
+  if(!Array.isArray(r.results)||r.checked!==r.results.length)throw Error('Invalid reconciliation response');
+  for(const item of r.results){
+   if(item.success===true&&['completed','cancelled'].includes(item.status)&&localStorage.getItem(pendingKey(user))===item.payment_id)localStorage.removeItem(pendingKey(user));
+  }
+  if(r.results.some(x=>x.success===true&&x.status==='completed'))await refreshListings();
+  return r.results.every(x=>x.success===true&&['completed','cancelled'].includes(x.status))&&r.checked<3;
+ })();
+ reconciliation=job;
+ try{return await job.promise;}finally{if(reconciliation===job)reconciliation=null;}
+}
+async function checkPreviousPayments(user){
+ try{return await reconcilePayments(user);}catch(e){console.warn('Payment reconciliation failed',e);return false;}
+}
 function pendingKey(user){return 'piloop_pending_payment_'+user;}
 async function recoverFeatured(payment,user){
  if(!payment?.identifier||!payment.transaction?.txid)return;
@@ -327,7 +348,7 @@ async function showFeaturedSettings(id,button){
   if(settings.payments_enabled!==true){alert(quote+'\n'+l[3]);return;}
   if(piPaymentUser!==user||!window.Pi){paymentNotice('برای پرداخت یک بار خارج شوید و دوباره با Pi وارد شوید.','Sign out and sign in with Pi again to enable payments.');return;}
   const pending=localStorage.getItem(pendingKey(user));
-  if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(recovered.status!=='completed')throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}
+  if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(!['completed','cancelled'].includes(recovered.status))throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}
   if(!confirm(quote+'\nTestnet — '+actionLabel+'?')||onlineUser!==user)return;
   await new Promise((resolve,reject)=>{
    let settled=false;
@@ -655,7 +676,7 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
   piUser=session?.user?.app_metadata?.pi_uid ? session.user.user_metadata?.pi_username||null : null;
   ready=true; updatePi();
   const nextUser=piUser?session.user.id:null;
-  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;resetImage();closeModal('addModal');document.getElementById('detailImage').removeAttribute('src');onlineItems=[];onlineSaved=[];favoritesReady=false;++favoriteVersion;++loadVersion;closeModal("detailModal");render();setTimeout(()=>{refreshListings();refreshFavorites();},0);}
+  if(nextUser!==onlineUser||event==='INITIAL_SESSION'){onlineUser=nextUser;resetImage();closeModal('addModal');document.getElementById('detailImage').removeAttribute('src');onlineItems=[];onlineSaved=[];favoritesReady=false;++favoriteVersion;++loadVersion;closeModal("detailModal");render();setTimeout(()=>{refreshListings();refreshFavorites();if(nextUser&&onlineUser===nextUser)checkPreviousPayments(nextUser);},0);}
  });
  button.onclick=async function(){
   if(busy||!ready)return;
@@ -674,6 +695,7 @@ for(const [id,view] of [["filterAll","all"],["filterSaved","saved"],["filterMine
    if(error||!data.session)throw new Error('Session activation failed');
    if(data.user?.id!==verified.user.profile_id||data.user?.app_metadata?.pi_uid!==verified.user.uid){await db.auth.signOut({scope:'local'});throw new Error('Account mismatch');}
    piUser=verified.user.username;piPaymentUser=data.user.id;updatePi();profile();
+   if(reconciliation?.user===data.user.id)await checkPreviousPayments(data.user.id);
    for(const p of incomplete){try{await recoverFeatured(p,data.user.id);}catch(e){console.warn(e);paymentNotice('پرداخت قبلی نیاز به بازیابی دارد.','Previous payment requires recovery.');}}
   }catch(error){alert('Pi Error: '+error.message);}
   finally{busy=false;updatePi();}
