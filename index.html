@@ -328,12 +328,32 @@ async function showFeaturedSettings(id,button){
   if(!window.ensurePiPaymentAuth)throw Error('Pi SDK unavailable');
   await window.ensurePiPaymentAuth(user);
   if(onlineUser!==user)return;
-  const reconciliation=await paymentRequest(user,{action:'reconcile'});
-  if(!Array.isArray(reconciliation.results))throw Error('Recovery unavailable');
-  if(reconciliation.results.some(r=>!r.success||!['completed','cancelled'].includes(r.status))){paymentNotice('پرداخت قبلی هنوز تعیین تکلیف نشده است. لطفاً وضعیت آن را در کیف پول بررسی کنید.','A previous payment is still unresolved. Check your wallet before paying again.');return;}
-  if(reconciliation.results.some(r=>r.status==='completed')){localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بررسی و بازیابی شد.','Previous payment recovered.');return;}
+  // Resolve previous payments before creating a new one; never cancel a transaction.
+  for(let attempt=0;attempt<10;attempt++){
+   const reconciliation=await paymentRequest(user,{action:'reconcile'});
+   if(!Array.isArray(reconciliation.results))throw Error('Recovery unavailable');
+   const results=reconciliation.results;
+   if(results.some(r=>r.success&&r.status==='completed')){
+    await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد. قبل از پرداخت جدید اعتبار آگهی را بررسی کنید.','Previous payment recovered. Check listing validity before paying again.');return;
+   }
+   if(!results.length)break;
+   for(const r of results){
+    if(r.success&&r.status==='cancelled'){
+     if(localStorage.getItem(pendingKey(user))===r.payment_id)localStorage.removeItem(pendingKey(user));continue;
+    }
+    if(r.error!=='Payment awaiting transaction'||!r.payment_id)throw Error('Recovery incomplete');
+    const p=await paymentRequest(user,{action:'inspect',payment_id:r.payment_id});
+    if(!['pending','approved'].includes(p.local_status)||p.local_has_txid!==false||p.local_applied!==false||p.pi_has_transaction!==false||p.pi_status?.transaction_verified!==false||p.pi_status?.developer_completed!==false)throw Error('Payment requires review');
+    if(!confirm(message('یک پرداخت قبلی به مبلغ '+p.amount+' پای بدون تراکنش باقی مانده است. اگر در دستگاه دیگری در حال پرداخت نیستید، آن را لغو کنیم و ادامه دهیم؟','A previous payment of '+p.amount+' Pi has no transaction. If you are not paying on another device, cancel it and continue?'))||onlineUser!==user)return;
+    const cancelled=await paymentRequest(user,{action:'cancel',payment_id:r.payment_id});
+    if(cancelled.status!=='cancelled')throw Error('Cancellation not confirmed');
+    if(localStorage.getItem(pendingKey(user))===r.payment_id)localStorage.removeItem(pendingKey(user));
+   }
+   if(attempt===9)throw Error('Too many unresolved payments');
+  }
   const pending=localStorage.getItem(pendingKey(user));
-  if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(!['completed','cancelled'].includes(recovered.status))throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}
+  if(pending){const recovered=await paymentRequest(user,{action:'recover',payment_id:pending});if(!['completed','cancelled'].includes(recovered.status))throw Error('Recovery incomplete');localStorage.removeItem(pendingKey(user));await refreshListings();if(recovered.status==='completed'){paymentNotice('پرداخت قبلی بازیابی شد.','Previous payment recovered.');return;}}
+  if(onlineUser!==user)return;
   if(!confirm(quote+'\nTestnet — '+actionLabel+'?')||onlineUser!==user)return;
   await new Promise((resolve,reject)=>{
    let settled=false;
